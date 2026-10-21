@@ -41,6 +41,22 @@ data class Filters(
         genres(type).isNotEmpty(),
     ).count { it }
 
+    /** Rótulos curtos da ordenação e dos filtros ativos, para o topo do Início na TV. */
+    fun labels(type: String, known: List<Genre>): List<String> = buildList {
+        add(sort.label)
+        when (period) {
+            Period.ANY -> Unit
+            Period.FROM_YEAR -> add("A partir de $fromYear")
+            else -> add(period.label)
+        }
+        if (minRating > 0) add("★ $minRating+")
+        val ids = genres(type)
+        if (ids.isNotEmpty()) {
+            val names = known.filter { it.id in ids }.map { it.name }
+            if (names.isEmpty()) add(if (ids.size == 1) "1 gênero" else "${ids.size} gêneros") else addAll(names)
+        }
+    }
+
     /** Converte para os parâmetros do /discover do TMDB. */
     fun toParams(type: String, today: LocalDate = LocalDate.now()): Map<String, String> {
         val dateField = if (type == "tv") "first_air_date" else "primary_release_date"

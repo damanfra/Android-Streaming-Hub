@@ -85,21 +85,23 @@ fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
 
     Scaffold(topBar = { TopAppBar(title = { Text("Buscar") }) }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text("Filme ou série") },
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Limpar") }
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-            )
+            TvTextFieldBox(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) { fieldModifier ->
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Filme ou série") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Limpar") }
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                    modifier = fieldModifier.fillMaxWidth(),
+                )
+            }
             val err = error
             when {
                 err != null -> ErrorBox(err)

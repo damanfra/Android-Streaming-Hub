@@ -26,6 +26,8 @@ object StreamingApps {
         val match: List<String>,
         /** URL de busca com %s para o título; null quando não há uma conhecida. */
         val searchUrl: String? = null,
+        /** Extras exigidos pelo app para seguir o link direto (ex.: Netflix de TV ignora o link sem "source"). */
+        val linkExtras: Map<String, String> = emptyMap(),
     )
 
     val all = listOf(
@@ -34,6 +36,8 @@ object StreamingApps {
             packages = listOf("com.netflix.mediaclient", "com.netflix.ninja"),
             match = listOf("netflix"),
             searchUrl = "https://www.netflix.com/search?q=%s",
+            // Sem isso o app de TV (com.netflix.ninja) abre só a tela inicial. Validado no Fire TV em 21/10/2026.
+            linkExtras = mapOf("source" to "30"),
         ),
         App(
             name = "Prime Video",
@@ -105,7 +109,9 @@ object StreamingApps {
         val pkg = app?.let { installedPackage(context, it) }
 
         if (app != null && pkg != null && directUrl != null &&
-            tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse(directUrl)).setPackage(pkg))
+            tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse(directUrl)).setPackage(pkg).apply {
+                app.linkExtras.forEach { (k, v) -> putExtra(k, v) }
+            })
         ) {
             return "Abrindo no ${app.name}…"
         }

@@ -58,6 +58,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Filtros do Início: ficam na memória enquanto o app está aberto. */
     val filters = MutableStateFlow(Filters())
 
+    /** Início: Filmes ("movie") ou Séries ("tv") e o serviço escolhido (-1 = todos os meus). Também só na memória. */
+    val homeType = MutableStateFlow("movie")
+    val homeProvider = MutableStateFlow(-1)
+
     private val genreCache = mutableMapOf<String, List<Genre>>()
 
     suspend fun genres(key: String, type: String): List<Genre> =

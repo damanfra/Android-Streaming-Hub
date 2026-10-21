@@ -8,7 +8,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
 import com.damanfra.streaminghub.AppViewModel
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,7 +29,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,22 +58,39 @@ private val HubColors = darkColorScheme(
     surfaceContainer = Color(0xFF171A21),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StreamingHubTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = HubColors, content = content)
+fun StreamingHubTheme(tv: Boolean = false, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = HubColors) {
+        CompositionLocalProvider(
+            LocalIsTv provides tv,
+            LocalRippleConfiguration provides if (tv) TvRipple else LocalRippleConfiguration.current,
+            content = content,
+        )
+    }
 }
 
 /** Capa + título + ano, usada nas grades. Com [onRemove], o toque longo mostra a opção "Remover". */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PosterCard(posterPath: String?, title: String, subtitle: String?, onRemove: (() -> Unit)? = null, onClick: () -> Unit) {
+fun PosterCard(
+    posterPath: String?,
+    title: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+    onRemove: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     var menu by remember { mutableStateOf(false) }
-    Box {
+    Box(modifier) {
         Column(
-            Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(
+            Modifier.tvFocusFrame().clip(RoundedCornerShape(8.dp)).combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                // Na TV a moldura de foco basta; o véu branco do realce apagaria a capa.
+                indication = if (LocalIsTv.current) null else LocalIndication.current,
                 onClick = onClick,
                 onLongClick = if (onRemove != null) ({ menu = true }) else null,
-            )
+            ).then(if (LocalIsTv.current) Modifier.padding(5.dp) else Modifier) // folga entre a moldura de foco e o texto
         ) {
             Poster(posterPath, title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
             Text(
@@ -167,5 +189,9 @@ fun posterCells(vm: AppViewModel): GridCells {
     val portrait by vm.colsPortrait.collectAsState()
     val landscape by vm.colsLandscape.collectAsState()
     val n = if (isLandscape()) landscape else portrait
-    return if (n > 0) GridCells.Fixed(n) else GridCells.Adaptive(110.dp)
+    return when {
+        n > 0 -> GridCells.Fixed(n)
+        LocalIsTv.current -> GridCells.Fixed(5) // o painel lateral ocupa o espaço de duas colunas
+        else -> GridCells.Adaptive(110.dp)
+    }
 }

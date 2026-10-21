@@ -31,13 +31,23 @@ App Android pessoal (Kotlin + Jetpack Compose) que centraliza os serviços de st
 | `ui/DetailScreen.kt` | detalhes, onde assistir, elenco, IMDb |
 | `ui/ListScreen.kt` | abas Recentes / Quero ver / Assistidos |
 | `ui/SearchScreen.kt`, `AppsScreen.kt`, `SettingsScreen.kt`, `App.kt`, `Components.kt` | demais telas e navegação |
+| `ui/Tv.kt` | modo TV: detecção (`LocalIsTv`), moldura de foco, painel lateral com dial, roteamento de foco painel↔grade, campo de texto que só abre o teclado no OK |
 
-## Funcionalidades prontas (até a v0.1.7)
+## Funcionalidades prontas
 
 Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha lista (Recentes, Quero ver, Assistidos), Apps instalados, Configurações (chave TMDB, serviços, **capas por linha** separadas para vertical e horizontal; na horizontal a barra de título some para sobrar altura).
 
+**Modo TV (21/10/2026, só quando `isTvDevice`; o celular não muda):** protótipos aprovados no canvas https://claude.ai/artifact/WcvGEm8VZYjnnWmiVF6f2z.
+- Painel lateral fixo (largura de 2 colunas de capas): atalhos Início/Buscar/Lista/Apps/Ajustes, Filmes/Séries, Filtros e, por último, o **dial de serviços** (▲▼ gira; catálogo recarrega após 350 ms parado). À direita, 5 capas por linha.
+- Foco: moldura branca + leve zoom (`tvFocusFrame`), realce do Material reforçado na TV (`TvRipple`). ► do painel entra na última capa com foco; ◄ da 1ª coluna volta ao dial; ao voltar dos Detalhes o foco retorna à capa aberta.
+- Voltar fora do painel leva o foco a ele; só fecha o app com o foco já no painel.
+- Campos de texto só abrem o teclado com OK (`TvTextFieldBox`).
+- Filtros num diálogo de 2 colunas: Ver resultados/Limpar e resumo fixos à esquerda, opções (chips grandes) à direita.
+- Detalhes em 3 colunas sem rolagem: capa grande, informações, coluna "Assistir em" (um botão por serviço assinado, foco inicial no primeiro).
+
 **Validado pelo dono no aparelho:** catálogo e filtro por serviço; detecção dos apps instalados; abertura direta no título em **todos** os serviços que ele assina; 3 colunas na vertical.
-**Ainda sem retorno de teste:** filtro "A partir de", elenco/direção, nota e botão do IMDb, aba Recentes.
+**Fire TV (Stick 3ª geração, Fire OS 7):** link direto validado em Netflix (precisa do extra `source=30`, já em `linkExtras`), HBO Max, Disney+ e Apple TV (os dois pedem perfil e depois seguem para o título) e Prime Video. Pacotes reais: `com.netflix.ninja`, `com.amazon.firebat`, `com.hbo.hbonow`, `com.disney.disneyplus`, `com.apple.atve.amazon.appletv`. Paramount+ e Globoplay não instalados lá.
+**Ainda sem retorno de teste:** filtro "A partir de", aba Recentes.
 
 ## Armadilhas e decisões
 
@@ -49,21 +59,21 @@ Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha
 - **Provedores com nomes variantes:** o TMDB lista "Netflix" e "Netflix Standard with Ads" separados. A UI agrupa por app (`appKey`/`forProvider`) para ter um botão só. Canais vendidos dentro de outra loja (nome contém "channel") são ignorados de propósito.
 - **Nota "Melhor avaliados":** exige mínimo de votos (300 filmes, 150 séries) para não listar títulos obscuros com nota 10.
 - **"Mais recentes":** limita a data a hoje para não mostrar estreias futuras.
-- **Pacotes por plataforma:** celular, Android TV e Fire TV usam IDs diferentes (ex.: Netflix `com.netflix.mediaclient` vs `com.netflix.ninja`). Para o Fire TV, **conferir os pacotes reais** do aparelho dele.
+- **Pacotes por plataforma:** celular, Android TV e Fire TV usam IDs diferentes (ex.: Netflix `com.netflix.mediaclient` vs `com.netflix.ninja`). Os do Fire TV do dono já foram conferidos (ver acima).
+- **Fire TV por ADB:** o IP é DHCP e muda após reiniciar (já foi `.5`, depois `.6`). Nesta máquina, iniciar o servidor com `Start-Process adb -ArgumentList 'nodaemon','server'` pelo PowerShell (sob o `timeout` do Git Bash ele morre/trava); no Git Bash, caminhos `/data/...` viram caminhos do Windows sem `MSYS_NO_PATHCONV=1`. Na primeira vez o Firewall do Windows pede para liberar o `adb.exe` (a janela fica escondida). Netflix e Apple TV bloqueiam `screencap` (sai vazio). Avisar o dono para não mexer no controle durante testes por ADB.
+- **APK no Fire TV:** instalado pelo PC com `$env:GITHUB_RUN_NUMBER='900'` (versionCode 900), então as releases do GitHub (versionCode menor) não instalam por cima lá; atualizar o Fire TV sempre pelo build local.
 - **Limite honesto do projeto:** os serviços não têm API pública. Não existe "continuar assistindo" nem histórico real; Recentes só registra o que foi aberto **por este app**.
 - **Outra máquina:** o passo a passo para replicar este ambiente (JDK, SDK, rede, ADB do Fire TV) está em `docs/AMBIENTE-LOCAL.md`.
 - **Compilação local (configurada em 21/10/2026):** JDK 17 (Temurin) e Android SDK (cmdline-tools, platform 35, build-tools 35.0.0) instalados na máquina do dono sem alterar `JAVA_HOME`/PATH do Windows (ele trabalha com .NET). Para compilar: na pasta do repositório, `. .\tools\env-android.ps1` (script versionado em `tools/`; define JDK, `ANDROID_HOME` e o truststore do Windows por causa do proxy com inspeção TLS) e depois `.gradlew.bat assembleRelease`. Sem o script, o `gradlew` falha com `PKIX path building failed`. O `gh` (GitHub CLI) está instalado em `C:Program FilesGitHub CLIgh.exe` e logado, para acompanhar o Actions. Fluxo atual: editar e compilar localmente, `git push` na `main`, GitHub só versiona e publica a release. Python não existe na máquina.
 
 ## Backlog
 
-1. **TV (Fire TV) — adiado até o dono ter o aparelho à mão** (só tem Fire TV em outro local). Decidido: **APK único adaptável** (celular + TV), com layout de TV ao detectar `UiModeManager` TELEVISION ou leanback. Plano:
-   - Foco por D-pad com destaque visível (borda + leve zoom) em capas, botões e chips; `FocusRequester` na primeira capa; foco restaurado ao voltar.
-   - Trocar `NavigationBar` inferior por barra lateral (ou abas no topo) no modo TV.
-   - `FilterSheet` (`ModalBottomSheet`) vira painel lateral/diálogo navegável; "Remover" já existe via toque longo, que no controle é o botão central mantido.
-   - Sempre horizontal, margens seguras (overscan), textos e capas maiores. O Fire TV Full HD renderiza a UI em 1920x1080 px mesmo em modelos 4K; a densidade é outra que a do celular, então conferir com `adb shell wm size` e `wm density`.
-   - Digitar a chave do TMDB com controle é ruim: oferecer alternativa (ex.: vir do celular). Busca pode usar voz da Alexa.
-   - Conferir os **pacotes reais** do Fire TV (`adb shell pm list packages`) e ajustar `StreamingApps.all` e o `<queries>` do manifest.
-   - Teste: ativar Depuração ADB no Fire TV (Opções do desenvolvedor), `adb connect IP`, instalar o APK direto e tirar screenshots; mais prático que emulador de TV.
+1. **TV (Fire TV):** a primeira rodada está pronta (ver "Modo TV"). Pendências observadas:
+   - Telas Buscar, Lista e Apps ainda têm layout de celular dentro da área da direita; Apps poderia virar grade de ícones.
+   - Lista ("Quero ver"/"Assistidos") fica só no aparelho: o que se marca no celular não aparece na TV.
+   - Margens seguras para TVs com zoom/overscan ligado (a do dono tinha "zoom automático").
+   - Digitar com controle: o teclado do Fire TV já oferece QR code para digitar pelo celular; busca por voz da Alexa ainda não testada.
+   - "Remover" na Minha lista depende de toque longo; conferir se o OK mantido funciona no controle.
 3. Opcional: persistir os filtros do Início entre aberturas.
 4. Ideias: integração com Trakt (histórico/progresso), mais serviços (Globoplay, Crunchyroll já mapeados sem busca própria), links validados por app.
 

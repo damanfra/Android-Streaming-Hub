@@ -1,8 +1,18 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 
 package com.damanfra.streaminghub.ui
 
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -94,7 +104,8 @@ private fun HomeContent(
     cells: GridCells,
     onOpen: (String, Int) -> Unit,
 ) {
-    var type by rememberSaveable { mutableStateOf("movie") }
+    val tv = LocalIsTv.current
+    val type by vm.homeType.collectAsState()
     val filters by vm.filters.collectAsState()
     var showFilters by remember { mutableStateOf(false) }
     var genres by remember { mutableStateOf<List<Genre>>(emptyList()) }
@@ -102,7 +113,7 @@ private fun HomeContent(
         genres = emptyList()
         genres = runCatching { vm.genres(key, type) }.getOrDefault(emptyList())
     }
-    var filter by rememberSaveable { mutableIntStateOf(-1) } // -1 = todos os meus serviços
+    val filter by vm.homeProvider.collectAsState() // -1 = todos os meus serviços
     val results = remember { mutableStateListOf<MediaItem>() }
     var page by remember { mutableIntStateOf(0) }
     var totalPages by remember { mutableIntStateOf(1) }
@@ -112,7 +123,7 @@ private fun HomeContent(
     val gridState = rememberLazyGridState()
 
     // Se o serviço filtrado foi desmarcado nas configurações, volta para "todos".
-    if (filter != -1 && providers.none { it.id == filter }) filter = -1
+    if (filter != -1 && providers.none { it.id == filter }) vm.homeProvider.value = -1
     val ids = if (filter == -1) providers.map { it.id }.toSet() else setOf(filter)
 
     suspend fun fetch(target: Int) {
@@ -152,35 +163,39 @@ private fun HomeContent(
         if (nearEnd && !loading && error == null && page in 1 until totalPages) fetch(page + 1)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = if (type == "movie") 0 else 1) {
-            Tab(selected = type == "movie", onClick = { type = "movie" }, text = { Text("Filmes") })
-            Tab(selected = type == "tv", onClick = { type = "tv" }, text = { Text("Séries") })
+    // TV: a entrada da grade fica na última capa com foco (se visível) ou na primeira visível.
+    val panel = if (tv) LocalTvPanelFocus.current else null
+    if (panel != null) {
+        DisposableEffect(panel) {
+            panel.gridReady = true
+            onDispose { panel.gridReady = false }
         }
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                val active = filters.activeCount(type)
-                FilterChip(
-                    selected = active > 0,
-                    onClick = { showFilters = true },
-                    label = { Text(if (active > 0) "Filtros ($active)" else "Filtros") },
-                    leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null) },
-                )
-            }
-            item {
-                FilterChip(selected = filter == -1, onClick = { filter = -1 }, label = { Text("Todos") })
-            }
-            items(providers, key = { it.id }) { p ->
-                FilterChip(
-                    selected = filter == p.id,
-                    onClick = { filter = p.id },
-                    label = { Text(p.name) },
-                    leadingIcon = { ProviderLogo(p.logoPath, p.name, size = 20) },
-                )
-            }
+    }
+    val entryIndex by remember {
+        derivedStateOf {
+            val visible = gridState.layoutInfo.visibleItemsInfo.map { it.index }
+            val last = panel?.lastPosterId?.let { id -> results.indexOfFirst { it.id == id } } ?: -1
+            if (last in visible) last else gridState.firstVisibleItemIndex
+        }
+    }
+    // Ao voltar dos Detalhes, o catálogo recarrega: assim que a capa aberta reaparece, o foco volta para ela.
+    LaunchedEffect(results.size, loading) {
+        val p = panel ?: return@LaunchedEffect
+        if (!p.restorePoster || page == 0 || loading) return@LaunchedEffect
+        p.restorePoster = false
+        val idx = results.indexOfFirst { it.id == p.lastPosterId }
+        if (idx >= 0) gridState.scrollToItem(idx)
+        withFrameNanos { }
+        runCatching { p.grid.requestFocus() }
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        // Na TV, Filmes/Séries, serviços e filtros ficam no painel lateral (TvSidePanel).
+        if (tv) {
+            val title = providers.firstOrNull { it.id == filter }?.name ?: "Todos os seus serviços"
+            TvHomeHeader(title, type, filters, genres)
+        } else {
+            PhoneHomeBar(vm, type, filter, providers, filters.activeCount(type)) { showFilters = true }
         }
         LazyVerticalGrid(
             state = gridState,
@@ -188,10 +203,22 @@ private fun HomeContent(
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().then(
+                if (panel == null) Modifier
+                else Modifier
+                    // ◄ na primeira coluna volta sempre ao dial, em qualquer fileira.
+                    .focusProperties { exit = { dir -> if (dir == FocusDirection.Left) panel.dial else FocusRequester.Default } }
+                    .focusGroup()
+            ),
         ) {
-            items(results, key = { it.id }) { m ->
-                PosterCard(m.posterPath, m.displayTitle, m.year) { onOpen(type, m.id) }
+            itemsIndexed(results, key = { _, m -> m.id }) { i, m ->
+                val posterModifier = if (panel == null) Modifier else Modifier
+                    .then(if (i == entryIndex) Modifier.focusRequester(panel.grid) else Modifier)
+                    .onFocusChanged { if (it.hasFocus) panel.lastPosterId = m.id }
+                PosterCard(m.posterPath, m.displayTitle, m.year, modifier = posterModifier) {
+                    panel?.restorePoster = true
+                    onOpen(type, m.id)
+                }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 val err = error
@@ -212,5 +239,45 @@ private fun HomeContent(
             onApply = { vm.filters.value = it; showFilters = false },
             onDismiss = { showFilters = false },
         )
+    }
+}
+
+/** Celular: abas Filmes/Séries e a faixa com Filtros e os chips de serviço. */
+@Composable
+private fun PhoneHomeBar(
+    vm: AppViewModel,
+    type: String,
+    filter: Int,
+    providers: List<Provider>,
+    activeFilters: Int,
+    onFilters: () -> Unit,
+) {
+    TabRow(selectedTabIndex = if (type == "movie") 0 else 1) {
+        Tab(selected = type == "movie", onClick = { vm.homeType.value = "movie" }, text = { Text("Filmes") })
+        Tab(selected = type == "tv", onClick = { vm.homeType.value = "tv" }, text = { Text("Séries") })
+    }
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        item {
+            FilterChip(
+                selected = activeFilters > 0,
+                onClick = onFilters,
+                label = { Text(if (activeFilters > 0) "Filtros ($activeFilters)" else "Filtros") },
+                leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null) },
+            )
+        }
+        item {
+            FilterChip(selected = filter == -1, onClick = { vm.homeProvider.value = -1 }, label = { Text("Todos") })
+        }
+        items(providers, key = { it.id }) { p ->
+            FilterChip(
+                selected = filter == p.id,
+                onClick = { vm.homeProvider.value = p.id },
+                label = { Text(p.name) },
+                leadingIcon = { ProviderLogo(p.logoPath, p.name, size = 20) },
+            )
+        }
     }
 }

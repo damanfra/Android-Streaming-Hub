@@ -118,19 +118,21 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { draft = it },
-                label = { Text("Chave ou token") },
-                singleLine = true,
-                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { showKey = !showKey }) {
-                        Icon(if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = "Mostrar")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            TvTextFieldBox(Modifier.fillMaxWidth()) { fieldModifier ->
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    label = { Text("Chave ou token") },
+                    singleLine = true,
+                    visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showKey = !showKey }) {
+                            Icon(if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = "Mostrar")
+                        }
+                    },
+                    modifier = fieldModifier.fillMaxWidth(),
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
@@ -160,13 +162,15 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 loading -> Loading()
                 err != null -> ErrorBox(err) { retry++ }
                 else -> {
-                    OutlinedTextField(
-                        value = filter,
-                        onValueChange = { filter = it },
-                        label = { Text("Filtrar serviços") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    TvTextFieldBox(Modifier.fillMaxWidth()) { fieldModifier ->
+                        OutlinedTextField(
+                            value = filter,
+                            onValueChange = { filter = it },
+                            label = { Text("Filtrar serviços") },
+                            singleLine = true,
+                            modifier = fieldModifier.fillMaxWidth(),
+                        )
+                    }
                     val selectedIds = selected.map { it.id }.toSet()
                     // Selecionados primeiro, depois os demais na ordem de relevância do TMDB.
                     val visible = all
