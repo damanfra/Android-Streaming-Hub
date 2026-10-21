@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.damanfra.streaminghub.data.Filters
 import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.Prefs
+import com.damanfra.streaminghub.data.RecentItem
 import com.damanfra.streaminghub.data.Tmdb
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.damanfra.streaminghub.data.Provider
@@ -28,6 +29,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setColumns(landscape: Boolean, value: Int) {
         viewModelScope.launch { prefs.setColumns(landscape, value) }
+    }
+
+    val recents: StateFlow<List<RecentItem>> = prefs.recents.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Registra que o título foi aberto em um serviço; o mesmo título sobe para o topo. Guarda os 60 últimos. */
+    fun addRecent(item: RecentItem) {
+        viewModelScope.launch {
+            prefs.updateRecents { list ->
+                (listOf(item) + list.filterNot { it.id == item.id && it.type == item.type }).take(60)
+            }
+        }
+    }
+
+    fun clearRecents() {
+        viewModelScope.launch { prefs.updateRecents { emptyList() } }
     }
 
     /** Filtros do Início: ficam na memória enquanto o app está aberto. */

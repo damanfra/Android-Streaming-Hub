@@ -12,7 +12,7 @@ enum class SortOption(val label: String) {
 enum class Period(val label: String) {
     ANY("Qualquer época"),
     LAST_YEAR("Últimos 12 meses"),
-    Y2020("Anos 2020"),
+    FROM_YEAR("A partir de…"),
     Y2010("Anos 2010"),
     Y2000("Anos 2000"),
     Y1990("Anos 90"),
@@ -23,6 +23,8 @@ enum class Period(val label: String) {
 data class Filters(
     val sort: SortOption = SortOption.POPULAR,
     val period: Period = Period.ANY,
+    /** Usado quando period == FROM_YEAR: mostra tudo lançado neste ano ou depois. */
+    val fromYear: Int = LocalDate.now().year - 5,
     val minRating: Int = 0,
     val genresMovie: Set<Int> = emptySet(),
     val genresTv: Set<Int> = emptySet(),
@@ -50,7 +52,7 @@ data class Filters(
         when (period) {
             Period.ANY -> Unit
             Period.LAST_YEAR -> from = today.minusYears(1)
-            Period.Y2020 -> { from = LocalDate.of(2020, 1, 1); to = LocalDate.of(2029, 12, 31) }
+            Period.FROM_YEAR -> from = LocalDate.of(fromYear, 1, 1)
             Period.Y2010 -> { from = LocalDate.of(2010, 1, 1); to = LocalDate.of(2019, 12, 31) }
             Period.Y2000 -> { from = LocalDate.of(2000, 1, 1); to = LocalDate.of(2009, 12, 31) }
             Period.Y1990 -> { from = LocalDate.of(1990, 1, 1); to = LocalDate.of(1999, 12, 31) }

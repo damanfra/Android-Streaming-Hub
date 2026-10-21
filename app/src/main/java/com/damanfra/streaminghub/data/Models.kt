@@ -47,6 +47,33 @@ data class Genre(val id: Int, val name: String)
 data class GenreList(val genres: List<Genre> = emptyList())
 
 @Serializable
+data class Person(val name: String)
+
+@Serializable
+data class CastMember(val name: String, val order: Int = 999)
+
+@Serializable
+data class CrewMember(val name: String, val job: String? = null)
+
+@Serializable
+data class Credits(val cast: List<CastMember> = emptyList(), val crew: List<CrewMember> = emptyList())
+
+@Serializable
+data class ExternalIds(@SerialName("imdb_id") val imdbId: String? = null)
+
+/** Título aberto em algum serviço, para a aba Recentes. */
+@Serializable
+data class RecentItem(
+    val id: Int,
+    val type: String,
+    val title: String,
+    val posterPath: String? = null,
+    val year: String? = null,
+    val app: String,
+    val openedAt: Long,
+)
+
+@Serializable
 data class CountryProviders(
     val link: String? = null,
     val flatrate: List<Provider> = emptyList(),
@@ -80,7 +107,19 @@ data class MediaDetail(
     @SerialName("number_of_seasons") val seasons: Int? = null,
     val genres: List<Genre> = emptyList(),
     @SerialName("watch/providers") val watchProviders: WatchProviders? = null,
+    val credits: Credits? = null,
+    @SerialName("external_ids") val externalIds: ExternalIds? = null,
+    /** Criadores (só séries). */
+    @SerialName("created_by") val createdBy: List<Person> = emptyList(),
 ) {
+    /** Até [n] atores principais, na ordem de destaque do TMDB. */
+    fun mainCast(n: Int = 6): List<String> =
+        credits?.cast.orEmpty().sortedBy { it.order }.take(n).map { it.name }
+
+    fun directors(): List<String> =
+        credits?.crew.orEmpty().filter { it.job == "Director" }.map { it.name }.distinct()
+
+    val imdbId: String? get() = externalIds?.imdbId?.takeIf { it.isNotBlank() }
     val displayTitle: String get() = title ?: name ?: "Sem título"
     val year: String? get() = (releaseDate ?: firstAirDate)?.take(4)?.takeIf { it.isNotBlank() }
 }

@@ -92,7 +92,7 @@ object Tmdb {
     }
 
     suspend fun detail(key: String, type: String, id: Int): MediaDetail =
-        json.decodeFromString(get(key, "$type/$id", mapOf("append_to_response" to "watch/providers")))
+        json.decodeFromString(get(key, "$type/$id", mapOf("append_to_response" to "watch/providers,credits,external_ids")))
 
     /** Lista de gêneros em português para filmes ou séries. */
     suspend fun genres(key: String, type: String): List<Genre> =

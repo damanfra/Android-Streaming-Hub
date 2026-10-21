@@ -129,6 +129,17 @@ object StreamingApps {
         return "${app.name} não está instalado."
     }
 
+    /** Abre a página do título no app do IMDb, se instalado; senão, no navegador. */
+    fun openImdb(context: Context, imdbId: String) {
+        val uri = Uri.parse("https://www.imdb.com/title/$imdbId/")
+        if (isInstalled(context, IMDB_PACKAGE) &&
+            tryStart(context, Intent(Intent.ACTION_VIEW, uri).setPackage(IMDB_PACKAGE))
+        ) return
+        tryStart(context, Intent(Intent.ACTION_VIEW, uri))
+    }
+
+    private const val IMDB_PACKAGE = "com.imdb.mobile"
+
     fun openUrl(context: Context, url: String): Boolean =
         tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 

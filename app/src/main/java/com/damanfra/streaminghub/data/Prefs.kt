@@ -17,6 +17,7 @@ class Prefs(private val context: Context) {
         val API_KEY = stringPreferencesKey("api_key")
         val PROVIDERS = stringPreferencesKey("providers")
         val WATCHLIST = stringPreferencesKey("watchlist")
+        val RECENTS = stringPreferencesKey("recents")
         val COLS_PORTRAIT = intPreferencesKey("cols_portrait")
         val COLS_LANDSCAPE = intPreferencesKey("cols_landscape")
     }
@@ -52,6 +53,17 @@ class Prefs(private val context: Context) {
             p[Keys.WATCHLIST] = json.encodeToString(transform(decodeList(p[Keys.WATCHLIST])))
         }
     }
+
+    val recents: Flow<List<RecentItem>> = context.dataStore.data.map { decodeRecents(it[Keys.RECENTS]) }
+
+    suspend fun updateRecents(transform: (List<RecentItem>) -> List<RecentItem>) {
+        context.dataStore.edit { p ->
+            p[Keys.RECENTS] = json.encodeToString(transform(decodeRecents(p[Keys.RECENTS])))
+        }
+    }
+
+    private fun decodeRecents(raw: String?): List<RecentItem> =
+        raw?.let { runCatching { json.decodeFromString<List<RecentItem>>(it) }.getOrNull() } ?: emptyList()
 
     private fun decodeProviders(raw: String?): List<Provider> =
         raw?.let { runCatching { json.decodeFromString<List<Provider>>(it) }.getOrNull() } ?: emptyList()

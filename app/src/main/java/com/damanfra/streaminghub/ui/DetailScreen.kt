@@ -51,6 +51,11 @@ import com.damanfra.streaminghub.AppViewModel
 import com.damanfra.streaminghub.data.JustWatch
 import com.damanfra.streaminghub.data.MediaDetail
 import com.damanfra.streaminghub.data.Provider
+import com.damanfra.streaminghub.data.RecentItem
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import com.damanfra.streaminghub.data.SavedItem
 import com.damanfra.streaminghub.data.StreamingApps
 import com.damanfra.streaminghub.data.Tmdb
@@ -125,11 +130,13 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
     val others = streaming.filterNot { isMine(it) || appKey(it) in mineKeys }.distinctBy { appKey(it) }
     val rentBuy = (br?.rent.orEmpty() + br?.buy.orEmpty()).distinctBy { it.id }
 
-    // Links diretos para a página do título em cada serviço (carregam em segundo plano).
-    var links by remember(d.id) { mutableStateOf<Map<StreamingApps.App, String>>(emptyMap()) }
+    // JustWatch, em segundo plano: links diretos por serviço e nota do IMDb.
+    var jw by remember(d.id) { mutableStateOf(JustWatch.Info()) }
     LaunchedEffect(d.id, type) {
-        links = JustWatch.directLinks(d.id, type, listOfNotNull(d.displayTitle, d.originalTitle, d.originalName))
+        jw = JustWatch.lookup(d.id, type, listOfNotNull(d.displayTitle, d.originalTitle, d.originalName))
     }
+    val links = jw.links
+    val imdbId = d.imdbId ?: jw.imdbId
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -150,8 +157,17 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                d.voteAverage?.takeIf { it > 0 }?.let {
-                    Text("★ " + String.format(Locale.US, "%.1f", it), color = MaterialTheme.colorScheme.primary)
+                val tmdbScore = d.voteAverage?.takeIf { it > 0 }
+                val imdbScore = jw.imdbScore
+                if (tmdbScore != null || imdbScore != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (imdbScore != null) {
+                            Text("IMDb ★ ${score(imdbScore)}", color = MaterialTheme.colorScheme.primary)
+                        }
+                        if (tmdbScore != null) {
+                            Text("TMDB ★ ${score(tmdbScore)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
                 if (d.genres.isNotEmpty()) {
                     Text(d.genres.joinToString(", ") { it.name }, style = MaterialTheme.typography.bodySmall)
@@ -190,6 +206,12 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
             val app = StreamingApps.forProvider(p.name)
             Button(
                 onClick = {
+                    vm.addRecent(
+                        RecentItem(
+                            id = d.id, type = type, title = d.displayTitle, posterPath = d.posterPath,
+                            year = d.year, app = app?.name ?: p.name, openedAt = System.currentTimeMillis(),
+                        )
+                    )
                     val msg = StreamingApps.openTitle(context, p.name, d.displayTitle, app?.let { links[it] })
                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 },
@@ -219,6 +241,24 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
             Text(d.overview, style = MaterialTheme.typography.bodyMedium)
         }
 
+        val cast = d.mainCast()
+        val makers = if (type == "tv") d.createdBy.map { it.name } else d.directors()
+        if (cast.isNotEmpty() || makers.isNotEmpty()) {
+            SectionTitle("Elenco e equipe")
+            if (makers.isNotEmpty()) {
+                CreditLine(if (type == "tv") "Criação" else "Direção", makers.joinToString(", "))
+            }
+            if (cast.isNotEmpty()) {
+                CreditLine("Elenco", cast.joinToString(", "))
+            }
+        }
+
+        if (imdbId != null) {
+            OutlinedButton(onClick = { StreamingApps.openImdb(context, imdbId) }, modifier = Modifier.padding(top = 8.dp)) {
+                Text(jw.imdbScore?.let { "Ver no IMDb · ★ ${score(it)}" } ?: "Ver no IMDb")
+            }
+        }
+
         Text(
             "Disponibilidade: JustWatch, via TMDB.",
             style = MaterialTheme.typography.labelSmall,
@@ -226,6 +266,21 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
             modifier = Modifier.padding(top = 16.dp),
         )
     }
+}
+
+private fun score(v: Double) = String.format(Locale.US, "%.1f", v)
+
+@Composable
+private fun CreditLine(label: String, names: String) {
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append("$label: ") }
+            append(names)
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

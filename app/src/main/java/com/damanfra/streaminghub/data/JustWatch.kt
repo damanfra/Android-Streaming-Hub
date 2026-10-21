@@ -39,7 +39,10 @@ object JustWatch {
                 objectType
                 content(country: ${'$'}country, language: ${'$'}language) {
                   title
-                  ... on MovieOrShowOrSeasonContent { externalIds { tmdbId } }
+                  ... on MovieOrShowOrSeasonContent {
+                    externalIds { tmdbId imdbId }
+                    scoring { imdbScore imdbVotes }
+                  }
                 }
                 offers(country: ${'$'}country, platform: WEB, filter: ${'$'}offerFilter) {
                   monetizationType
@@ -52,19 +55,27 @@ object JustWatch {
         }
     """.trimIndent()
 
+    /** O que a JustWatch sabe de um título: links diretos por app e a nota no IMDb. */
+    data class Info(
+        val links: Map<StreamingApps.App, String> = emptyMap(),
+        val imdbScore: Double? = null,
+        val imdbVotes: Int? = null,
+        val imdbId: String? = null,
+    )
+
     /**
-     * Devolve app → URL direta do título, tentando primeiro o título em português e depois o original.
-     * [type] é "movie" ou "tv" (como no TMDB).
+     * Procura o título na JustWatch, tentando primeiro o título em português e depois o original,
+     * e confere pelo ID do TMDB para não pegar um homônimo. [type] é "movie" ou "tv".
      */
-    suspend fun directLinks(tmdbId: Int, type: String, titles: List<String>): Map<StreamingApps.App, String> {
+    suspend fun lookup(tmdbId: Int, type: String, titles: List<String>): Info {
         for (title in titles.filter { it.isNotBlank() }.distinct()) {
             val found = runCatching { search(tmdbId, type, title) }.getOrNull()
-            if (!found.isNullOrEmpty()) return found
+            if (found != null) return found
         }
-        return emptyMap()
+        return Info()
     }
 
-    private suspend fun search(tmdbId: Int, type: String, title: String): Map<StreamingApps.App, String>? =
+    private suspend fun search(tmdbId: Int, type: String, title: String): Info? =
         withContext(Dispatchers.IO) {
             val objectType = if (type == "tv") "SHOW" else "MOVIE"
             val body = buildJsonObject {
@@ -109,7 +120,14 @@ object JustWatch {
                     val app = StreamingApps.forProvider(name) ?: return@forEach
                     links.putIfAbsent(app, url)
                 }
-            links
+            val content = node.obj("content")
+            val scoring = content?.obj("scoring")
+            Info(
+                links = links,
+                imdbScore = scoring?.str("imdbScore")?.toDoubleOrNull()?.takeIf { it > 0 },
+                imdbVotes = scoring?.str("imdbVotes")?.toDoubleOrNull()?.toInt(),
+                imdbId = content?.obj("externalIds")?.str("imdbId")?.takeIf { it.isNotBlank() },
+            )
         }
 
     private fun JsonElement.obj(key: String): JsonObject? =

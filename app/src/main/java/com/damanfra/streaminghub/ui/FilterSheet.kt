@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import java.time.LocalDate
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,8 +67,12 @@ fun FilterSheet(
             SectionTitle("Época")
             ChipGroup {
                 Period.entries.forEach { p ->
-                    FilterChip(selected = draft.period == p, onClick = { draft = draft.copy(period = p) }, label = { Text(p.label) })
+                    val label = if (p == Period.FROM_YEAR && draft.period == p) "A partir de ${draft.fromYear}" else p.label
+                    FilterChip(selected = draft.period == p, onClick = { draft = draft.copy(period = p) }, label = { Text(label) })
                 }
+            }
+            if (draft.period == Period.FROM_YEAR) {
+                YearPicker(selected = draft.fromYear, onPick = { draft = draft.copy(fromYear = it) })
             }
 
             SectionTitle("Nota mínima")
@@ -111,6 +119,23 @@ fun FilterSheet(
                 OutlinedButton(onClick = { draft = Filters() }, modifier = Modifier.weight(1f)) { Text("Limpar") }
                 Button(onClick = { onApply(draft) }, modifier = Modifier.weight(1f)) { Text("Ver resultados") }
             }
+        }
+    }
+}
+
+/** Faixa rolável de anos, do atual até 1930, já posicionada no ano escolhido. */
+@Composable
+private fun YearPicker(selected: Int, onPick: (Int) -> Unit) {
+    val years = remember { (LocalDate.now().year downTo 1930).toList() }
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = (years.indexOf(selected) - 2).coerceAtLeast(0))
+    Text(
+        "Mostra o que foi lançado em $selected ou depois.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    LazyRow(state = state, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(years) { y ->
+            FilterChip(selected = y == selected, onClick = { onPick(y) }, label = { Text(y.toString()) })
         }
     }
 }
