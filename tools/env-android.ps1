@@ -18,7 +18,7 @@ if ($env:USE_WINDOWS_TRUSTSTORE -ne '0') {
 
 # O Gradle precisa do JDK 17 também no daemon; isso evita mexer no JAVA_HOME global.
 $gp = "$env:USERPROFILE\.gradle\gradle.properties"
-if (-not (Select-String -Path $gp -Pattern 'org.gradle.java.home' -Quiet -ErrorAction SilentlyContinue)) {
+if (-not ((Test-Path $gp) -and (Select-String -Path $gp -Pattern 'org.gradle.java.home' -Quiet))) {
     New-Item -ItemType Directory -Force (Split-Path $gp) | Out-Null
     Add-Content $gp ('org.gradle.java.home=' + ($env:JAVA_HOME -replace '\\', '/' -replace ':', '\:')) -Encoding ascii
 }
