@@ -3,6 +3,11 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # Só documentação e scripts de apoio: não geram APK nem release.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'tools/**'
   workflow_dispatch:
 
 permissions:
