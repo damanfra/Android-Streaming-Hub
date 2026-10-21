@@ -42,6 +42,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun removeRecent(type: String, id: Int) {
+        viewModelScope.launch { prefs.updateRecents { list -> list.filterNot { it.id == id && it.type == type } } }
+    }
+
+    /** Tira da Minha lista (vale para "Quero ver" e "Assistidos"). */
+    fun removeSaved(type: String, id: Int) {
+        viewModelScope.launch { prefs.updateWatchlist { list -> list.filterNot { it.id == id && it.type == type } } }
+    }
+
     fun clearRecents() {
         viewModelScope.launch { prefs.updateRecents { emptyList() } }
     }

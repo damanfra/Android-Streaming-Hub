@@ -7,7 +7,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
 import com.damanfra.streaminghub.AppViewModel
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +22,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,20 +58,34 @@ fun StreamingHubTheme(content: @Composable () -> Unit) {
     MaterialTheme(colorScheme = HubColors, content = content)
 }
 
-/** Capa + título + ano, usada nas grades. */
+/** Capa + título + ano, usada nas grades. Com [onRemove], o toque longo mostra a opção "Remover". */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PosterCard(posterPath: String?, title: String, subtitle: String?, onClick: () -> Unit) {
-    Column(Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
-        Poster(posterPath, title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
-        Text(
-            title,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-        if (subtitle != null) {
-            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+fun PosterCard(posterPath: String?, title: String, subtitle: String?, onRemove: (() -> Unit)? = null, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        Column(
+            Modifier.clip(RoundedCornerShape(8.dp)).combinedClickable(
+                onClick = onClick,
+                onLongClick = if (onRemove != null) ({ menu = true }) else null,
+            )
+        ) {
+            Poster(posterPath, title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+            Text(
+                title,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        if (onRemove != null) {
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Remover") }, onClick = { menu = false; onRemove() })
+            }
         }
     }
 }

@@ -62,7 +62,9 @@ fun ListScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
                             }
                         }
                         items(recents, key = { "${it.type}-${it.id}" }) { r ->
-                            PosterCard(r.posterPath, r.title, "${r.app} · ${whenOpened(r.openedAt)}") { onOpen(r.type, r.id) }
+                            PosterCard(r.posterPath, r.title, "${r.app} · ${whenOpened(r.openedAt)}", onRemove = { vm.removeRecent(r.type, r.id) }) {
+                                onOpen(r.type, r.id)
+                            }
                         }
                     }
                 }
@@ -76,7 +78,7 @@ fun ListScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
                     } else {
                         PosterGrid(cells) {
                             items(shown, key = { "${it.type}-${it.id}" }) { s ->
-                                PosterCard(s.posterPath, s.title, listOfNotNull(typeLabel(s.type), s.year).joinToString(" · ")) {
+                                PosterCard(s.posterPath, s.title, listOfNotNull(typeLabel(s.type), s.year).joinToString(" · "), onRemove = { vm.removeSaved(s.type, s.id) }) {
                                     onOpen(s.type, s.id)
                                 }
                             }
