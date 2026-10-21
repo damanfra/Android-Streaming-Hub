@@ -32,7 +32,7 @@ App Android pessoal (Kotlin + Jetpack Compose) que centraliza os serviços de st
 | `ui/ListScreen.kt` | abas Recentes / Quero ver / Assistidos |
 | `ui/SearchScreen.kt`, `AppsScreen.kt`, `SettingsScreen.kt`, `App.kt`, `Components.kt` | demais telas e navegação |
 
-## Funcionalidades prontas (até a v0.1.5)
+## Funcionalidades prontas (até a v0.1.7)
 
 Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha lista (Recentes, Quero ver, Assistidos), Apps instalados, Configurações (chave TMDB, serviços, **capas por linha** separadas para vertical e horizontal; na horizontal a barra de título some para sobrar altura).
 
@@ -51,12 +51,18 @@ Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha
 - **"Mais recentes":** limita a data a hoje para não mostrar estreias futuras.
 - **Pacotes por plataforma:** celular, Android TV e Fire TV usam IDs diferentes (ex.: Netflix `com.netflix.mediaclient` vs `com.netflix.ninja`). Para o Fire TV, **conferir os pacotes reais** do aparelho dele.
 - **Limite honesto do projeto:** os serviços não têm API pública. Não existe "continuar assistindo" nem histórico real; Recentes só registra o que foi aberto **por este app**.
-- **Compilação:** o ambiente de nuvem onde o projeto nasceu não alcançava Maven/Gradle, então todos os builds foram validados **só pelo GitHub Actions**. Localmente é preciso JDK 17 e Android SDK (ou Android Studio).
+- **Compilação local (configurada em 21/10/2026):** JDK 17 (Temurin) e Android SDK (cmdline-tools, platform 35, build-tools 35.0.0) instalados na máquina do dono sem alterar `JAVA_HOME`/PATH do Windows (ele trabalha com .NET). Para compilar: na pasta do repositório, `. ..env-android.ps1` (script fora do repo, define JDK, `ANDROID_HOME` e o truststore do Windows por causa do proxy com inspeção TLS) e depois `.gradlew.bat assembleRelease`. Sem o script, o `gradlew` falha com `PKIX path building failed`. O `gh` (GitHub CLI) está instalado em `C:Program FilesGitHub CLIgh.exe` e logado, para acompanhar o Actions. Fluxo atual: editar e compilar localmente, `git push` na `main`, GitHub só versiona e publica a release. Python não existe na máquina.
 
 ## Backlog
 
-1. **Recentes:** pressionar e segurar um título mostra "Remover da lista" (pedido explícito do dono).
-2. **TV (Fire TV):** navegação por D-pad com foco visível nas capas, layout horizontal, testar o APK no aparelho dele.
+1. **TV (Fire TV) — adiado até o dono ter o aparelho à mão** (só tem Fire TV em outro local). Decidido: **APK único adaptável** (celular + TV), com layout de TV ao detectar `UiModeManager` TELEVISION ou leanback. Plano:
+   - Foco por D-pad com destaque visível (borda + leve zoom) em capas, botões e chips; `FocusRequester` na primeira capa; foco restaurado ao voltar.
+   - Trocar `NavigationBar` inferior por barra lateral (ou abas no topo) no modo TV.
+   - `FilterSheet` (`ModalBottomSheet`) vira painel lateral/diálogo navegável; "Remover" já existe via toque longo, que no controle é o botão central mantido.
+   - Sempre horizontal, margens seguras (overscan), textos e capas maiores. O Fire TV Full HD renderiza a UI em 1920x1080 px mesmo em modelos 4K; a densidade é outra que a do celular, então conferir com `adb shell wm size` e `wm density`.
+   - Digitar a chave do TMDB com controle é ruim: oferecer alternativa (ex.: vir do celular). Busca pode usar voz da Alexa.
+   - Conferir os **pacotes reais** do Fire TV (`adb shell pm list packages`) e ajustar `StreamingApps.all` e o `<queries>` do manifest.
+   - Teste: ativar Depuração ADB no Fire TV (Opções do desenvolvedor), `adb connect IP`, instalar o APK direto e tirar screenshots; mais prático que emulador de TV.
 3. Opcional: persistir os filtros do Início entre aberturas.
 4. Ideias: integração com Trakt (histórico/progresso), mais serviços (Globoplay, Crunchyroll já mapeados sem busca própria), links validados por app.
 
