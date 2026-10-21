@@ -63,7 +63,13 @@ object Tmdb {
         }
 
     /** Populares disponíveis por assinatura nos serviços informados (type = "movie" ou "tv"). */
-    suspend fun discover(key: String, type: String, providerIds: Set<Int>, page: Int): Paged<MediaItem> {
+    suspend fun discover(
+        key: String,
+        type: String,
+        providerIds: Set<Int>,
+        page: Int,
+        filters: Filters = Filters(),
+    ): Paged<MediaItem> {
         val params = mutableMapOf(
             "watch_region" to REGION,
             "sort_by" to "popularity.desc",
@@ -72,6 +78,7 @@ object Tmdb {
             "with_watch_monetization_types" to "flatrate|free|ads",
         )
         if (providerIds.isNotEmpty()) params["with_watch_providers"] = providerIds.joinToString("|")
+        params.putAll(filters.toParams(type))
         val res = json.decodeFromString<Paged<MediaItem>>(get(key, "discover/$type", params))
         return res.copy(results = res.results.map { it.copy(mediaType = type) })
     }
@@ -86,6 +93,10 @@ object Tmdb {
 
     suspend fun detail(key: String, type: String, id: Int): MediaDetail =
         json.decodeFromString(get(key, "$type/$id", mapOf("append_to_response" to "watch/providers")))
+
+    /** Lista de gêneros em português para filmes ou séries. */
+    suspend fun genres(key: String, type: String): List<Genre> =
+        json.decodeFromString<GenreList>(get(key, "genre/$type/list")).genres
 
     /** Todos os serviços que o TMDB conhece no Brasil (filmes + séries). */
     suspend fun providers(key: String): List<Provider> {

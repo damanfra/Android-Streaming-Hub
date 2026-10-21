@@ -3,7 +3,11 @@ package com.damanfra.streaminghub
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.damanfra.streaminghub.data.Filters
+import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.Prefs
+import com.damanfra.streaminghub.data.Tmdb
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.damanfra.streaminghub.data.Provider
 import com.damanfra.streaminghub.data.SavedItem
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +29,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setColumns(landscape: Boolean, value: Int) {
         viewModelScope.launch { prefs.setColumns(landscape, value) }
     }
+
+    /** Filtros do Início: ficam na memória enquanto o app está aberto. */
+    val filters = MutableStateFlow(Filters())
+
+    private val genreCache = mutableMapOf<String, List<Genre>>()
+
+    suspend fun genres(key: String, type: String): List<Genre> =
+        genreCache[type] ?: Tmdb.genres(key, type).also { genreCache[type] = it }
 
     fun saveApiKey(value: String) {
         viewModelScope.launch { prefs.setApiKey(value) }

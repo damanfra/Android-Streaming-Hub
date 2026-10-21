@@ -44,6 +44,9 @@ data class ProviderList(val results: List<Provider> = emptyList())
 data class Genre(val id: Int, val name: String)
 
 @Serializable
+data class GenreList(val genres: List<Genre> = emptyList())
+
+@Serializable
 data class CountryProviders(
     val link: String? = null,
     val flatrate: List<Provider> = emptyList(),

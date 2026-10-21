@@ -39,6 +39,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.damanfra.streaminghub.AppViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Icon
+import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.MediaItem
 import com.damanfra.streaminghub.data.Provider
 import com.damanfra.streaminghub.data.Tmdb
@@ -59,7 +63,7 @@ fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -
             when {
                 k == null -> Loading()
                 k.isBlank() || providers.isEmpty() -> SetupCard(hasKey = k.isNotBlank(), onSettings = onSettings)
-                else -> HomeContent(k, providers, posterCells(vm), onOpen)
+                else -> HomeContent(vm, k, providers, posterCells(vm), onOpen)
             }
         }
     }
@@ -83,8 +87,21 @@ private fun SetupCard(hasKey: Boolean, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells, onOpen: (String, Int) -> Unit) {
+private fun HomeContent(
+    vm: AppViewModel,
+    key: String,
+    providers: List<Provider>,
+    cells: GridCells,
+    onOpen: (String, Int) -> Unit,
+) {
     var type by rememberSaveable { mutableStateOf("movie") }
+    val filters by vm.filters.collectAsState()
+    var showFilters by remember { mutableStateOf(false) }
+    var genres by remember { mutableStateOf<List<Genre>>(emptyList()) }
+    LaunchedEffect(key, type) {
+        genres = emptyList()
+        genres = runCatching { vm.genres(key, type) }.getOrDefault(emptyList())
+    }
     var filter by rememberSaveable { mutableIntStateOf(-1) } // -1 = todos os meus serviços
     val results = remember { mutableStateListOf<MediaItem>() }
     var page by remember { mutableIntStateOf(0) }
@@ -102,7 +119,7 @@ private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells
         loading = true
         error = null
         try {
-            val res = Tmdb.discover(key, type, ids, target)
+            val res = Tmdb.discover(key, type, ids, target, filters)
             val existing = results.map { it.id }.toHashSet()
             results.addAll(res.results.filter { it.id !in existing })
             page = target
@@ -116,7 +133,7 @@ private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells
         }
     }
 
-    LaunchedEffect(type, ids, retry) {
+    LaunchedEffect(type, ids, filters, retry) {
         results.clear()
         page = 0
         totalPages = 1
@@ -131,7 +148,7 @@ private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells
             info.totalItemsCount > 0 && last >= info.totalItemsCount - 6
         }
     }
-    LaunchedEffect(nearEnd, page, type, ids, error) {
+    LaunchedEffect(nearEnd, page, type, ids, filters, error) {
         if (nearEnd && !loading && error == null && page in 1 until totalPages) fetch(page + 1)
     }
 
@@ -144,6 +161,15 @@ private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item {
+                val active = filters.activeCount(type)
+                FilterChip(
+                    selected = active > 0,
+                    onClick = { showFilters = true },
+                    label = { Text(if (active > 0) "Filtros ($active)" else "Filtros") },
+                    leadingIcon = { Icon(Icons.Filled.Tune, contentDescription = null) },
+                )
+            }
             item {
                 FilterChip(selected = filter == -1, onClick = { filter = -1 }, label = { Text("Todos") })
             }
@@ -172,9 +198,19 @@ private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells
                 when {
                     loading -> Loading()
                     err != null -> ErrorBox(err) { if (page == 0) retry++ else error = null }
-                    results.isEmpty() && page > 0 -> EmptyBox("Nada encontrado para esse filtro no Brasil.")
+                    results.isEmpty() && page > 0 -> EmptyBox("Nada encontrado com esses filtros no Brasil.")
                 }
             }
         }
+    }
+
+    if (showFilters) {
+        FilterSheet(
+            type = type,
+            current = filters,
+            genres = genres,
+            onApply = { vm.filters.value = it; showFilters = false },
+            onDismiss = { showFilters = false },
+        )
     }
 }
