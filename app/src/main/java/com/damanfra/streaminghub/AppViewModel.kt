@@ -8,7 +8,10 @@ import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.Prefs
 import com.damanfra.streaminghub.data.RecentItem
 import com.damanfra.streaminghub.data.Tmdb
+import com.damanfra.streaminghub.data.HomeState
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import com.damanfra.streaminghub.data.Provider
 import com.damanfra.streaminghub.data.SavedItem
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,12 +58,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { prefs.updateRecents { emptyList() } }
     }
 
-    /** Filtros do Início: ficam na memória enquanto o app está aberto. */
+    /** Filtros do Início. Salvos no aparelho junto com [homeType], [homeProvider] e [lastOpened]. */
     val filters = MutableStateFlow(Filters())
 
-    /** Início: Filmes ("movie") ou Séries ("tv") e o serviço escolhido (-1 = todos os meus). Também só na memória. */
+    /** Início: Filmes ("movie") ou Séries ("tv") e o serviço escolhido (-1 = todos os meus). */
     val homeType = MutableStateFlow("movie")
     val homeProvider = MutableStateFlow(-1)
+
+    /** Último título aberto a partir do Início. */
+    val lastOpened = MutableStateFlow<Int?>(null)
+
+    /** false até ler o estado salvo; o Início espera para não buscar o catálogo duas vezes. */
+    val homeLoaded = MutableStateFlow(false)
+
+    /** Ligado só na abertura do app quando há [lastOpened]: o Início rola até ele uma vez. */
+    var restoreOnStart = false
+
+    init {
+        viewModelScope.launch {
+            prefs.loadHome()?.let { s ->
+                filters.value = s.filters
+                homeType.value = s.type
+                homeProvider.value = s.provider
+                lastOpened.value = s.lastOpened
+                restoreOnStart = s.lastOpened != null
+            }
+            homeLoaded.value = true
+            combine(filters, homeType, homeProvider, lastOpened) { f, t, p, l -> HomeState(t, p, f, l) }
+                .drop(1)
+                .collect { prefs.saveHome(it) }
+        }
+    }
 
     private val genreCache = mutableMapOf<String, List<Genre>>()
 

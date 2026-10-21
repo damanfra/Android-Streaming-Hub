@@ -1,5 +1,6 @@
 package com.damanfra.streaminghub.data
 
+import kotlinx.serialization.Serializable
 import java.time.LocalDate
 
 enum class SortOption(val label: String) {
@@ -19,7 +20,22 @@ enum class Period(val label: String) {
     OLDER("Antes de 1990"),
 }
 
+/**
+ * O que o Início guarda no aparelho para voltar igual depois que o sistema fecha o app
+ * (no Fire TV isso acontece quase sempre ao abrir um serviço de streaming).
+ */
+@Serializable
+data class HomeState(
+    val type: String = "movie",
+    /** -1 = todos os meus serviços. */
+    val provider: Int = -1,
+    val filters: Filters = Filters(),
+    /** Último título aberto no Início: ao reabrir o app, a grade volta até ele. */
+    val lastOpened: Int? = null,
+)
+
 /** Filtros e ordenação do Início. Gêneros ficam separados porque filmes e séries usam IDs diferentes no TMDB. */
+@Serializable
 data class Filters(
     val sort: SortOption = SortOption.POPULAR,
     val period: Period = Period.ANY,

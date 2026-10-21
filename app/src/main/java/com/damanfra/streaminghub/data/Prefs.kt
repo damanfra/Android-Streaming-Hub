@@ -6,12 +6,13 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/** Tudo que o app guarda no aparelho: chave do TMDB, serviços assinados e Minha lista. */
+/** Tudo que o app guarda no aparelho: chave do TMDB, serviços assinados, Minha lista e o estado do Início. */
 class Prefs(private val context: Context) {
     private object Keys {
         val API_KEY = stringPreferencesKey("api_key")
@@ -20,6 +21,15 @@ class Prefs(private val context: Context) {
         val RECENTS = stringPreferencesKey("recents")
         val COLS_PORTRAIT = intPreferencesKey("cols_portrait")
         val COLS_LANDSCAPE = intPreferencesKey("cols_landscape")
+        val HOME = stringPreferencesKey("home_state")
+    }
+
+    /** Estado do Início salvo da última vez; null na primeira abertura (ou se o formato mudou). */
+    suspend fun loadHome(): HomeState? =
+        context.dataStore.data.first()[Keys.HOME]?.let { runCatching { json.decodeFromString<HomeState>(it) }.getOrNull() }
+
+    suspend fun saveHome(state: HomeState) {
+        context.dataStore.edit { it[Keys.HOME] = json.encodeToString(state) }
     }
 
     /** Capas por linha; 0 = automático (pelo tamanho da tela). */

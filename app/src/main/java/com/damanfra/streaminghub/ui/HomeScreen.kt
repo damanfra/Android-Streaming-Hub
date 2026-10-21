@@ -64,6 +64,7 @@ import kotlinx.coroutines.isActive
 fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -> Unit) {
     val key by vm.apiKey.collectAsState()
     val providers by vm.providers.collectAsState()
+    val loaded by vm.homeLoaded.collectAsState()
 
     // Na horizontal (e na TV) a barra de título some para sobrar altura para as capas.
     val landscape = isLandscape()
@@ -71,7 +72,7 @@ fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -
         Column(Modifier.padding(pad).fillMaxSize()) {
             val k = key
             when {
-                k == null -> Loading()
+                k == null || !loaded -> Loading()
                 k.isBlank() || providers.isEmpty() -> SetupCard(hasKey = k.isNotBlank(), onSettings = onSettings)
                 else -> HomeContent(vm, k, providers, posterCells(vm), onOpen)
             }
@@ -178,15 +179,26 @@ private fun HomeContent(
             if (last in visible) last else gridState.firstVisibleItemIndex
         }
     }
-    // Ao voltar dos Detalhes, o catálogo recarrega: assim que a capa aberta reaparece, o foco volta para ela.
+    // O catálogo recarrega ao voltar dos Detalhes (TV) e ao reabrir o app (celular e TV, via estado salvo):
+    // assim que o título aberto reaparece, a grade rola até ele e, na TV, o foco vai para a capa.
     LaunchedEffect(results.size, loading) {
-        val p = panel ?: return@LaunchedEffect
-        if (!p.restorePoster || page == 0 || loading) return@LaunchedEffect
-        p.restorePoster = false
-        val idx = results.indexOfFirst { it.id == p.lastPosterId }
-        if (idx >= 0) gridState.scrollToItem(idx)
-        withFrameNanos { }
-        runCatching { p.grid.requestFocus() }
+        if (page == 0 || loading) return@LaunchedEffect
+        val target = when {
+            panel?.restorePoster == true -> panel.lastPosterId
+            vm.restoreOnStart -> vm.lastOpened.value
+            else -> return@LaunchedEffect
+        }
+        panel?.restorePoster = false
+        vm.restoreOnStart = false
+        val idx = results.indexOfFirst { it.id == target }
+        if (idx >= 0) {
+            panel?.lastPosterId = target
+            gridState.scrollToItem(idx)
+        }
+        if (panel != null) {
+            withFrameNanos { }
+            runCatching { panel.grid.requestFocus() }
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -217,6 +229,7 @@ private fun HomeContent(
                     .onFocusChanged { if (it.hasFocus) panel.lastPosterId = m.id }
                 PosterCard(m.posterPath, m.displayTitle, m.year, modifier = posterModifier) {
                     panel?.restorePoster = true
+                    vm.lastOpened.value = m.id
                     onOpen(type, m.id)
                 }
             }

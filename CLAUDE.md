@@ -15,7 +15,7 @@ App Android pessoal (Kotlin + Jetpack Compose) que centraliza os serviços de st
 - **Serviços do usuário:** ele marca em Configurações quais assina. O Início filtra por eles (`with_watch_providers`).
 - **Abrir no app:** `StreamingApps.openTitle` tenta, nesta ordem: (1) link direto da página do título (vem da JustWatch) com `setPackage` do app instalado; (2) busca do app, para quem tem `searchUrl`; (3) abre o app com o título copiado; (4) navegador/loja.
 - **JustWatch (`JustWatch.kt`):** usa a API GraphQL **não oficial** (`apis.justwatch.com/graphql`) para pegar os links diretos por serviço e a nota do IMDb. Confere o título pelo `tmdbId` para evitar homônimo. Qualquer falha cai no plano B sem quebrar a tela.
-- **Persistência local (`Prefs.kt`, DataStore):** chave do TMDB, serviços assinados, Minha lista, Recentes, colunas por orientação. Os **filtros do Início ficam só na memória** (voltam ao padrão ao fechar o app).
+- **Persistência local (`Prefs.kt`, DataStore):** chave do TMDB, serviços assinados, Minha lista, Recentes, colunas por orientação e o **estado do Início** (`HomeState`: filtros, Filmes/Séries, serviço e último título aberto, salvo a cada mudança). Ao reabrir o app, o Início volta igual e rola até o último título (no Fire TV o sistema costuma fechar o app ao abrir um serviço).
 
 ## Mapa do código (`app/src/main/java/com/damanfra/streaminghub/`)
 
@@ -74,7 +74,6 @@ Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha
    - Margens seguras para TVs com zoom/overscan ligado (a do dono tinha "zoom automático").
    - Digitar com controle: o teclado do Fire TV já oferece QR code para digitar pelo celular; busca por voz da Alexa ainda não testada.
    - "Remover" na Minha lista depende de toque longo; conferir se o OK mantido funciona no controle.
-3. Opcional: persistir os filtros do Início entre aberturas.
 4. Ideias: integração com Trakt (histórico/progresso), mais serviços (Globoplay, Crunchyroll já mapeados sem busca própria), links validados por app.
 
 ## Como o dono prefere trabalhar
