@@ -1,6 +1,12 @@
 package com.damanfra.streaminghub.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalConfiguration
+import com.damanfra.streaminghub.AppViewModel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -129,3 +135,16 @@ fun SectionTitle(text: String) {
 }
 
 fun typeLabel(type: String?) = if (type == "tv") "Série" else "Filme"
+
+@Composable
+fun isLandscape(): Boolean =
+    LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+/** Colunas das grades de capas, conforme a orientação atual e o que foi escolhido nas Configurações. */
+@Composable
+fun posterCells(vm: AppViewModel): GridCells {
+    val portrait by vm.colsPortrait.collectAsState()
+    val landscape by vm.colsLandscape.collectAsState()
+    val n = if (isLandscape()) landscape else portrait
+    return if (n > 0) GridCells.Fixed(n) else GridCells.Adaptive(110.dp)
+}

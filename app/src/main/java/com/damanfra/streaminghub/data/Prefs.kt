@@ -2,6 +2,7 @@ package com.damanfra.streaminghub.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,16 @@ class Prefs(private val context: Context) {
         val API_KEY = stringPreferencesKey("api_key")
         val PROVIDERS = stringPreferencesKey("providers")
         val WATCHLIST = stringPreferencesKey("watchlist")
+        val COLS_PORTRAIT = intPreferencesKey("cols_portrait")
+        val COLS_LANDSCAPE = intPreferencesKey("cols_landscape")
+    }
+
+    /** Capas por linha; 0 = automático (pelo tamanho da tela). */
+    val colsPortrait: Flow<Int> = context.dataStore.data.map { it[Keys.COLS_PORTRAIT] ?: 0 }
+    val colsLandscape: Flow<Int> = context.dataStore.data.map { it[Keys.COLS_LANDSCAPE] ?: 0 }
+
+    suspend fun setColumns(landscape: Boolean, value: Int) {
+        context.dataStore.edit { it[if (landscape) Keys.COLS_LANDSCAPE else Keys.COLS_PORTRAIT] = value }
     }
 
     private val json = Tmdb.json

@@ -19,6 +19,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val providers: StateFlow<List<Provider>> = prefs.providers.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val watchlist: StateFlow<List<SavedItem>> = prefs.watchlist.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val colsPortrait: StateFlow<Int> = prefs.colsPortrait.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+    val colsLandscape: StateFlow<Int> = prefs.colsLandscape.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    fun setColumns(landscape: Boolean, value: Int) {
+        viewModelScope.launch { prefs.setColumns(landscape, value) }
+    }
+
     fun saveApiKey(value: String) {
         viewModelScope.launch { prefs.setApiKey(value) }
     }

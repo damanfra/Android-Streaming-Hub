@@ -51,13 +51,15 @@ fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -
     val key by vm.apiKey.collectAsState()
     val providers by vm.providers.collectAsState()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Streaming Hub") }) }) { pad ->
+    // Na horizontal (e na TV) a barra de título some para sobrar altura para as capas.
+    val landscape = isLandscape()
+    Scaffold(topBar = { if (!landscape) TopAppBar(title = { Text("Streaming Hub") }) }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             val k = key
             when {
                 k == null -> Loading()
                 k.isBlank() || providers.isEmpty() -> SetupCard(hasKey = k.isNotBlank(), onSettings = onSettings)
-                else -> HomeContent(k, providers, onOpen)
+                else -> HomeContent(k, providers, posterCells(vm), onOpen)
             }
         }
     }
@@ -81,7 +83,7 @@ private fun SetupCard(hasKey: Boolean, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun HomeContent(key: String, providers: List<Provider>, onOpen: (String, Int) -> Unit) {
+private fun HomeContent(key: String, providers: List<Provider>, cells: GridCells, onOpen: (String, Int) -> Unit) {
     var type by rememberSaveable { mutableStateOf("movie") }
     var filter by rememberSaveable { mutableIntStateOf(-1) } // -1 = todos os meus serviços
     val results = remember { mutableStateListOf<MediaItem>() }
@@ -156,7 +158,7 @@ private fun HomeContent(key: String, providers: List<Provider>, onOpen: (String,
         }
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Adaptive(110.dp),
+            columns = cells,
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

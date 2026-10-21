@@ -34,7 +34,8 @@ fun ListScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
     val watched = list.filter { it.watched }
     val shown = if (tab == 0) toWatch else watched
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Minha lista") }) }) { pad ->
+    val landscape = isLandscape()
+    Scaffold(topBar = { if (!landscape) TopAppBar(title = { Text("Minha lista") }) }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Quero ver (${toWatch.size})") })
@@ -47,7 +48,7 @@ fun ListScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
                 )
             }
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(110.dp),
+                columns = posterCells(vm),
                 contentPadding = PaddingValues(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),

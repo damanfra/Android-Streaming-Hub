@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package com.damanfra.streaminghub.ui
 
@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,12 +52,28 @@ import com.damanfra.streaminghub.data.Tmdb
 import kotlinx.coroutines.CancellationException
 
 @Composable
+private fun ColumnsPicker(label: String, current: Int, options: List<Int>, onPick: (Int) -> Unit) {
+    Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 4.dp))
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        (listOf(0) + options).forEach { n ->
+            FilterChip(
+                selected = current == n,
+                onClick = { onPick(n) },
+                label = { Text(if (n == 0) "Auto" else n.toString()) },
+            )
+        }
+    }
+}
+
+@Composable
 fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     val key by vm.apiKey.collectAsState()
     val selected by vm.providers.collectAsState()
     var draft by rememberSaveable(key) { mutableStateOf(key.orEmpty()) }
     var showKey by remember { mutableStateOf(false) }
+    val colsPortrait by vm.colsPortrait.collectAsState()
+    val colsLandscape by vm.colsLandscape.collectAsState()
 
     var all by remember { mutableStateOf<List<Provider>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
@@ -124,6 +143,15 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                     Text("Abrir site do TMDB")
                 }
             }
+
+            SectionTitle("Capas por linha")
+            Text(
+                "\"Auto\" ajusta pelo tamanho da tela. A horizontal também vale para a TV.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ColumnsPicker("Celular em pé (vertical)", colsPortrait, (2..5).toList()) { vm.setColumns(false, it) }
+            ColumnsPicker("Deitado / TV (horizontal)", colsLandscape, (4..10).toList()) { vm.setColumns(true, it) }
 
             SectionTitle("Serviços que você assina (${selected.size})")
             val err = error
