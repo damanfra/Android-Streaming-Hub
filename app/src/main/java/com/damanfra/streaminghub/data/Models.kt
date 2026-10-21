@@ -64,6 +64,8 @@ data class MediaDetail(
     val id: Int,
     val title: String? = null,
     val name: String? = null,
+    @SerialName("original_title") val originalTitle: String? = null,
+    @SerialName("original_name") val originalName: String? = null,
     val overview: String? = null,
     val tagline: String? = null,
     @SerialName("poster_path") val posterPath: String? = null,

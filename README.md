@@ -28,7 +28,7 @@ No Fire TV (Fire OS), dá para instalar o mesmo APK com o app Downloader. O app 
 ## Limitações conhecidas
 
 - Os serviços não oferecem API pública. O catálogo e a disponibilidade vêm do **TMDB** (dados da JustWatch), então não há "continuar assistindo" nem histórico real dos apps.
-- Não há deep link oficial por ID. Netflix, Prime Video e Apple TV abrem direto na busca. Nos outros serviços o app é aberto com o título copiado.
+- Não há deep link oficial por ID. O app busca o link da página do título em cada serviço na API pública (não oficial) da JustWatch e abre direto nele. Se a JustWatch não tiver o link ou a API mudar, o app volta a abrir a busca/o app com o título copiado.
 - Os pacotes dos apps variam entre celular, Android TV e Fire TV. A lista fica em `StreamingApps.kt`.
 
 ## Stack

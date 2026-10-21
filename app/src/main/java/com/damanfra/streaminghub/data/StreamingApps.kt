@@ -96,17 +96,27 @@ object StreamingApps {
         return "${app.name} não está instalado."
     }
 
-    /** Abre um título no serviço indicado. Devolve uma mensagem curta para o usuário. */
-    fun openTitle(context: Context, providerName: String, title: String): String {
-        copyToClipboard(context, title)
+    /**
+     * Abre um título no serviço indicado. [directUrl] é o link da página do título no serviço (via JustWatch);
+     * quando existe, o app abre direto nele. Devolve uma mensagem curta para o usuário.
+     */
+    fun openTitle(context: Context, providerName: String, title: String, directUrl: String? = null): String {
         val app = forProvider(providerName)
-            ?: return "Não sei abrir \"$providerName\" ainda. Título copiado."
-        val pkg = installedPackage(context, app)
+        val pkg = app?.let { installedPackage(context, it) }
+
+        if (app != null && pkg != null && directUrl != null &&
+            tryStart(context, Intent(Intent.ACTION_VIEW, Uri.parse(directUrl)).setPackage(pkg))
+        ) {
+            return "Abrindo no ${app.name}…"
+        }
+
+        copyToClipboard(context, title)
+        if (app == null) return "Não sei abrir \"$providerName\" ainda. Título copiado."
         val search = app.searchUrl?.let { Uri.parse(it.format(Uri.encode(title))) }
 
         if (pkg != null) {
             if (search != null && tryStart(context, Intent(Intent.ACTION_VIEW, search).setPackage(pkg))) {
-                return "Abrindo a busca do ${app.name}…"
+                return "Abrindo a busca do ${app.name}. Título copiado, se precisar colar."
             }
             if (startLauncher(context, pkg)) {
                 return "Abrindo ${app.name}. Título copiado: cole na busca."

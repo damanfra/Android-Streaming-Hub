@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.damanfra.streaminghub.AppViewModel
+import com.damanfra.streaminghub.data.JustWatch
 import com.damanfra.streaminghub.data.MediaDetail
 import com.damanfra.streaminghub.data.Provider
 import com.damanfra.streaminghub.data.SavedItem
@@ -117,9 +118,18 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
         val app = StreamingApps.forProvider(p.name) ?: return false
         return myNames.any { StreamingApps.forProvider(it) == app }
     }
-    val mine = streaming.filter { isMine(it) }
-    val others = streaming.filterNot { isMine(it) }
+    // Um botão por app: "Netflix" e "Netflix Standard with Ads" abrem o mesmo lugar.
+    fun appKey(p: Provider) = StreamingApps.forProvider(p.name)?.name ?: p.name
+    val mine = streaming.filter { isMine(it) }.distinctBy { appKey(it) }
+    val mineKeys = mine.map { appKey(it) }.toSet()
+    val others = streaming.filterNot { isMine(it) || appKey(it) in mineKeys }.distinctBy { appKey(it) }
     val rentBuy = (br?.rent.orEmpty() + br?.buy.orEmpty()).distinctBy { it.id }
+
+    // Links diretos para a página do título em cada serviço (carregam em segundo plano).
+    var links by remember(d.id) { mutableStateOf<Map<StreamingApps.App, String>>(emptyMap()) }
+    LaunchedEffect(d.id, type) {
+        links = JustWatch.directLinks(d.id, type, listOfNotNull(d.displayTitle, d.originalTitle, d.originalName))
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -177,16 +187,17 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
             )
         }
         mine.forEach { p ->
+            val app = StreamingApps.forProvider(p.name)
             Button(
                 onClick = {
-                    val msg = StreamingApps.openTitle(context, p.name, d.displayTitle)
+                    val msg = StreamingApps.openTitle(context, p.name, d.displayTitle, app?.let { links[it] })
                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 ProviderLogo(p.logoPath, p.name, size = 24)
                 Spacer(Modifier.width(10.dp))
-                Text("Abrir no ${p.name}")
+                Text("Abrir no ${app?.name ?: p.name}")
             }
         }
         if (others.isNotEmpty()) {
