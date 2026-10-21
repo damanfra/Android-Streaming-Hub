@@ -53,7 +53,12 @@ data class Filters(
         val ids = genres(type)
         if (ids.isNotEmpty()) {
             val names = known.filter { it.id in ids }.map { it.name }
-            if (names.isEmpty()) add(if (ids.size == 1) "1 gênero" else "${ids.size} gêneros") else addAll(names)
+            // Com muitos gêneros, uma linha só ("Ação, Comédia +9"), para não empurrar o resto da tela.
+            when {
+                names.isEmpty() -> add(if (ids.size == 1) "1 gênero" else "${ids.size} gêneros")
+                names.size <= 2 -> addAll(names)
+                else -> add("${names[0]}, ${names[1]} +${names.size - 2}")
+            }
         }
     }
 

@@ -91,10 +91,7 @@ fun TvFilterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
             Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 Column(Modifier.width(200.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     FilterTitle(type)
-                    // Resumo do rascunho, para conferir antes de aplicar.
-                    draft.labels(type, genres).forEach {
-                        Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    // Botões logo abaixo do título: o resumo, que pode crescer, fica depois deles.
                     Button(
                         onClick = { vm.filters.value = draft; onDismiss() },
                         modifier = Modifier.padding(top = 6.dp).fillMaxWidth().height(44.dp).tvFocusFrame(RoundedCornerShape(50), 1.04f),
@@ -105,7 +102,12 @@ fun TvFilterDialog(vm: AppViewModel, onDismiss: () -> Unit) {
                         onClick = { draft = Filters() },
                         modifier = Modifier.fillMaxWidth().height(40.dp).tvFocusFrame(RoundedCornerShape(50), 1.04f),
                     ) { Text("Limpar", fontSize = 15.sp) }
-                    Spacer(Modifier.weight(1f))
+                    // Resumo do rascunho, para conferir antes de aplicar.
+                    Column(Modifier.padding(top = 8.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        draft.labels(type, genres).forEach {
+                            Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                        }
+                    }
                     Text(
                         "◄ volta aos botões de qualquer opção\nVoltar fecha sem aplicar",
                         fontSize = 11.sp,
