@@ -8,7 +8,12 @@ import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.Prefs
 import com.damanfra.streaminghub.data.RecentItem
 import com.damanfra.streaminghub.data.Tmdb
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.setValue
 import com.damanfra.streaminghub.data.HomeState
+import com.damanfra.streaminghub.data.MediaItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
@@ -64,6 +69,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Início: Filmes ("movie") ou Séries ("tv") e o serviço escolhido (-1 = todos os meus). */
     val homeType = MutableStateFlow("movie")
     val homeProvider = MutableStateFlow(-1)
+
+    /**
+     * Catálogo já carregado no Início (todas as páginas). Fica aqui, e não na tela, para que voltar dos
+     * Detalhes não recarregue a lista do zero e perca títulos que estavam além da 1ª página.
+     */
+    class HomeCatalog {
+        val results = mutableStateListOf<MediaItem>()
+        var page by mutableIntStateOf(0)
+        var totalPages by mutableIntStateOf(1)
+        /** Tipo, serviços e filtros da busca que gerou [results]. */
+        var query: Any? = null
+    }
+
+    val catalog = HomeCatalog()
 
     /** Último título aberto a partir do Início. */
     val lastOpened = MutableStateFlow<Int?>(null)

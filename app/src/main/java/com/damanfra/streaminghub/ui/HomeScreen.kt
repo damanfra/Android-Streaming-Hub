@@ -6,6 +6,8 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusDirection
@@ -115,13 +117,16 @@ private fun HomeContent(
         genres = runCatching { vm.genres(key, type) }.getOrDefault(emptyList())
     }
     val filter by vm.homeProvider.collectAsState() // -1 = todos os meus serviços
-    val results = remember { mutableStateListOf<MediaItem>() }
-    var page by remember { mutableIntStateOf(0) }
-    var totalPages by remember { mutableIntStateOf(1) }
+    // O catálogo carregado mora no ViewModel: ao voltar dos Detalhes ele continua lá, com todas as páginas.
+    val catalog = vm.catalog
+    val results = catalog.results
+    var page by catalog::page
+    var totalPages by catalog::totalPages
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
 
     // Se o serviço filtrado foi desmarcado nas configurações, volta para "todos".
     if (filter != -1 && providers.none { it.id == filter }) vm.homeProvider.value = -1
@@ -146,6 +151,10 @@ private fun HomeContent(
     }
 
     LaunchedEffect(type, ids, filters, retry) {
+        val query = Triple(type, ids, filters)
+        // Mesma busca de antes (voltou dos Detalhes ou de outra aba): mantém o que já foi carregado.
+        if (retry == 0 && catalog.query == query && results.isNotEmpty()) return@LaunchedEffect
+        catalog.query = query
         results.clear()
         page = 0
         totalPages = 1
@@ -179,8 +188,8 @@ private fun HomeContent(
             if (last in visible) last else gridState.firstVisibleItemIndex
         }
     }
-    // O catálogo recarrega ao voltar dos Detalhes (TV) e ao reabrir o app (celular e TV, via estado salvo):
-    // assim que o título aberto reaparece, a grade rola até ele e, na TV, o foco vai para a capa.
+    // Ao voltar dos Detalhes (TV) e ao reabrir o app (celular e TV, via estado salvo), a grade rola até
+    // o título aberto e, na TV, o foco vai para a capa.
     LaunchedEffect(results.size, loading) {
         if (page == 0 || loading) return@LaunchedEffect
         val target = when {
@@ -188,9 +197,15 @@ private fun HomeContent(
             vm.restoreOnStart -> vm.lastOpened.value
             else -> return@LaunchedEffect
         }
+        val idx = results.indexOfFirst { it.id == target }
+        // Ao reabrir o app só a 1ª página vem: busca as seguintes (até 6) até achar o título.
+        // Fora deste efeito: a busca muda `loading`, que é chave dele, e o cancelaria no meio.
+        if (idx < 0 && page < totalPages && page < 6) {
+            scope.launch { fetch(page + 1) }
+            return@LaunchedEffect
+        }
         panel?.restorePoster = false
         vm.restoreOnStart = false
-        val idx = results.indexOfFirst { it.id == target }
         if (idx >= 0) {
             panel?.lastPosterId = target
             gridState.scrollToItem(idx)
