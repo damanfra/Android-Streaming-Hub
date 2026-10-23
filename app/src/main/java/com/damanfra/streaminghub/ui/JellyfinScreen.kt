@@ -547,6 +547,8 @@ fun JellyfinSettings(vm: AppViewModel) {
     var code by remember { mutableStateOf<String?>(null) }
     val deviceId = rememberSaveable { Jellyfin.newDeviceId() }
 
+    // Na TV o foco vai para o vizinho mais próximo do centro: botões estreitos sob campos largos ficam
+    // inalcançáveis com ▲▼. Por isso os botões desta seção ocupam a largura toda.
     Text(
         "Mostra a biblioteca do seu servidor como mais um serviço no Início e toca os vídeos aqui mesmo.",
         style = MaterialTheme.typography.bodySmall,
@@ -562,9 +564,10 @@ fun JellyfinSettings(vm: AppViewModel) {
             modifier = fm.fillMaxWidth(),
         )
     }
+    // Os botões não ficam desabilitados durante a espera: na TV o foco sairia deles e pularia para o topo.
     OutlinedButton(
-        enabled = !busy,
         onClick = {
+            if (busy) return@OutlinedButton
             scope.launch {
                 busy = true
                 status = "Procurando servidores na rede…"
@@ -574,7 +577,7 @@ fun JellyfinSettings(vm: AppViewModel) {
                 busy = false
             }
         },
-        modifier = Modifier.tvFocusFrame(RoundedCornerShape(50), 1.04f),
+        modifier = Modifier.fillMaxWidth().tvFocusFrame(RoundedCornerShape(50), 1.02f),
     ) { Text("Procurar na rede") }
     if (found.size > 1) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -597,10 +600,11 @@ fun JellyfinSettings(vm: AppViewModel) {
             modifier = fm.fillMaxWidth(),
         )
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            enabled = !busy && server.isNotBlank() && user.isNotBlank(),
+            enabled = server.isNotBlank() && user.isNotBlank(),
             onClick = {
+                if (busy) return@Button
                 scope.launch {
                     busy = true
                     status = "Conectando…"
@@ -616,11 +620,12 @@ fun JellyfinSettings(vm: AppViewModel) {
                     }
                 }
             },
-            modifier = Modifier.tvFocusFrame(RoundedCornerShape(50), 1.04f),
+            modifier = Modifier.weight(1f).tvFocusFrame(RoundedCornerShape(50), 1.03f),
         ) { Text("Entrar") }
         OutlinedButton(
-            enabled = !busy && server.isNotBlank(),
+            enabled = server.isNotBlank(),
             onClick = {
+                if (busy) return@OutlinedButton
                 scope.launch {
                     busy = true
                     val address = Jellyfin.normalizeServer(server)
@@ -647,7 +652,7 @@ fun JellyfinSettings(vm: AppViewModel) {
                     }
                 }
             },
-            modifier = Modifier.tvFocusFrame(RoundedCornerShape(50), 1.04f),
+            modifier = Modifier.weight(1f).tvFocusFrame(RoundedCornerShape(50), 1.03f),
         ) { Text("Quick Connect") }
     }
     code?.let {
