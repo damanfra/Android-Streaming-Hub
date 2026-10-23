@@ -1,13 +1,29 @@
 package com.damanfra.streaminghub
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.media.MediaCodecList
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
 import android.view.KeyEvent
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.FrameLayout
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
 import android.widget.Toast
+import androidx.media3.common.Format
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.ui.DefaultTimeBar
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -62,9 +78,14 @@ class PlayerActivity : ComponentActivity() {
         }
 
         private val reports = CoroutineScope(Dispatchers.IO)
+
+        /** Passo de ◄ ► (e da barra de tempo com foco). */
+        private const val SEEK_MS = 10_000L
     }
 
     private lateinit var view: PlayerView
+    private lateinit var seekLabel: TextView
+    private lateinit var trackRow: LinearLayout
     private var player: ExoPlayer? = null
     private var session: JfSession? = null
     private var itemId = ""
@@ -81,9 +102,43 @@ class PlayerActivity : ComponentActivity() {
         view = PlayerView(this).apply {
             setBackgroundColor(Color.BLACK)
             keepScreenOn = true
-            setShowSubtitleButton(true)
+            // Legendas e Áudio ganham botões grandes no meio (trackRow); ⏮ ⏭ não servem com um título só.
+            setShowSubtitleButton(false)
+            setShowPreviousButton(false)
+            setShowNextButton(false)
+            setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v ->
+                trackRow.visibility = v
+                if (v != android.view.View.VISIBLE) view.requestFocus()
+            })
         }
-        setContentView(view)
+        // Com a barra de tempo em foco, ◄ ► pulavam 1/20 do filme (5 min num filme de 1h40).
+        view.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.setKeyTimeIncrement(SEEK_MS)
+        applyFocusFrames(view)
+
+        seekLabel = TextView(this).apply {
+            textSize = 22f
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply { setColor(0xCC000000.toInt()); cornerRadius = dp(10f) }
+            setPadding(dp(20), dp(10), dp(20), dp(10))
+            visibility = android.view.View.GONE
+        }
+        trackRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            visibility = android.view.View.GONE
+            addView(rowButton("Legendas") { chooseTrack(C.TRACK_TYPE_TEXT) })
+            addView(rowButton("Áudio") { chooseTrack(C.TRACK_TYPE_AUDIO) })
+        }
+        setContentView(FrameLayout(this).apply {
+            addView(view, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            addView(seekLabel, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                topMargin = dp(40)
+            })
+            // Logo abaixo do ⏸ central: ▼ a partir dele cai direto aqui.
+            addView(trackRow, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER).apply {
+                topMargin = dp(220)
+            })
+        })
+        view.requestFocus()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, view).apply {
             hide(WindowInsetsCompat.Type.systemBars())
@@ -290,7 +345,188 @@ class PlayerActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // Direcional e teclas de mídia do controle vão para o player (mostrar controles, avançar, pausar).
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        view.dispatchKeyEvent(event) || super.dispatchKeyEvent(event)
+    // ---------- Controle remoto (estilo Netflix) ----------
+
+    /** Teclas tratadas aqui no ACTION_DOWN: o ACTION_UP correspondente também é engolido. */
+    private val swallowUp = mutableSetOf<Int>()
+
+    /**
+     * Com os controles escondidos: ◄ ► voltam/avançam 10 s (segurando, acelera), OK pausa/continua,
+     * ▲ ▼ mostram os controles. Com os controles na tela, o direcional navega entre os botões e
+     * Voltar só os esconde. Teclas de mídia do controle funcionam sempre.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val p = player ?: return super.dispatchKeyEvent(event)
+        val code = event.keyCode
+        if (event.action == KeyEvent.ACTION_UP && swallowUp.remove(code)) return true
+        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+
+        fun handled(): Boolean {
+            swallowUp += code
+            return true
+        }
+        when (code) {
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { togglePlay(p); return handled() }
+            KeyEvent.KEYCODE_MEDIA_PLAY -> { p.play(); return handled() }
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> { p.pause(); return handled() }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { seekStep(p, +1, event.repeatCount); return handled() }
+            KeyEvent.KEYCODE_MEDIA_REWIND -> { seekStep(p, -1, event.repeatCount); return handled() }
+        }
+        val controls = view.isControllerFullyVisible || trackRow.hasFocus()
+        if (controls) {
+            if (code == KeyEvent.KEYCODE_BACK) {
+                view.hideController()
+                return handled()
+            }
+            return super.dispatchKeyEvent(event)
+        }
+        when (code) {
+            KeyEvent.KEYCODE_DPAD_RIGHT -> seekStep(p, +1, event.repeatCount)
+            KeyEvent.KEYCODE_DPAD_LEFT -> seekStep(p, -1, event.repeatCount)
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                togglePlay(p)
+                view.showController()
+            }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> view.showController()
+            else -> return super.dispatchKeyEvent(event)
+        }
+        return handled()
+    }
+
+    private fun togglePlay(p: Player) {
+        if (p.isPlaying) p.pause() else p.play()
+    }
+
+    /** Destino acumulado enquanto o usuário aperta ◄ ► seguidos, para os passos somarem sem esperar o player. */
+    private var seekTarget = -1L
+    private var lastSeekAt = 0L
+
+    private fun seekStep(p: Player, direction: Int, repeat: Int) {
+        // Segurando a tecla, o Android repete ~20x/s: um passo a cada 3 repetições, maiores com o tempo.
+        if (repeat > 0 && repeat % 3 != 0) return
+        val step = when {
+            repeat < 30 -> SEEK_MS
+            repeat < 90 -> 30_000L
+            else -> 60_000L
+        }
+        val now = System.currentTimeMillis()
+        val base = if (seekTarget >= 0 && now - lastSeekAt < 1500) seekTarget else p.currentPosition
+        val duration = p.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
+        seekTarget = (base + direction * step).coerceIn(0, duration)
+        lastSeekAt = now
+        p.seekTo(seekTarget)
+
+        val total = if (duration == Long.MAX_VALUE) "" else " / ${clock(duration)}"
+        seekLabel.text = "${if (direction > 0) "▶▶" else "◀◀"}  ${clock(seekTarget)}$total"
+        seekLabel.visibility = android.view.View.VISIBLE
+        seekLabel.removeCallbacks(hideSeekLabel)
+        seekLabel.postDelayed(hideSeekLabel, 1500)
+    }
+
+    private val hideSeekLabel = Runnable { seekLabel.visibility = android.view.View.GONE }
+
+    private fun clock(ms: Long): String {
+        val s = ms / 1000
+        return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, (s % 3600) / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+    }
+
+    // ---------- Legendas e áudio ----------
+
+    private class TrackOption(val label: String, val group: Tracks.Group?, val index: Int)
+
+    /** Lista simples de faixas (navegável pelo controle). Para legendas, a primeira opção é "Desligada". */
+    private fun chooseTrack(type: Int) {
+        val p = player ?: return
+        val options = mutableListOf<TrackOption>()
+        if (type == C.TRACK_TYPE_TEXT) options += TrackOption("Desligada", null, 0)
+        p.currentTracks.groups.filter { it.type == type }.forEach { g ->
+            for (i in 0 until g.length) {
+                if (g.isTrackSupported(i)) options += TrackOption(trackLabel(g.getTrackFormat(i), type), g, i)
+            }
+        }
+        val real = options.count { it.group != null }
+        if (real == 0 || (type == C.TRACK_TYPE_AUDIO && real == 1)) {
+            Toast.makeText(this, if (type == C.TRACK_TYPE_TEXT) "Este vídeo não tem legendas." else "Só há uma faixa de áudio.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val disabled = type in p.trackSelectionParameters.disabledTrackTypes
+        val selected = options.indexOfFirst { it.group != null && !disabled && it.group.isTrackSelected(it.index) }
+        val checked = if (selected >= 0) selected else if (type == C.TRACK_TYPE_TEXT) 0 else -1
+
+        AlertDialog.Builder(this)
+            .setTitle(if (type == C.TRACK_TYPE_TEXT) "Legendas" else "Áudio")
+            .setSingleChoiceItems(options.map { it.label }.toTypedArray(), checked) { dialog, which ->
+                val o = options[which]
+                val params = p.trackSelectionParameters.buildUpon()
+                if (o.group == null) {
+                    params.setTrackTypeDisabled(type, true)
+                } else {
+                    params.setTrackTypeDisabled(type, false)
+                        .setOverrideForType(TrackSelectionOverride(o.group.mediaTrackGroup, o.index))
+                }
+                p.trackSelectionParameters = params.build()
+                dialog.dismiss()
+            }
+            .show()
+    }
+
+    /** "Português (externa)", "Inglês · 5.1 · AC3"... */
+    private fun trackLabel(f: Format, type: Int): String {
+        val pt = Locale("pt", "BR")
+        val language = f.language?.takeIf { it != "und" && it.isNotBlank() }
+            ?.let { Locale.forLanguageTag(it).getDisplayLanguage(pt).replaceFirstChar { c -> c.titlecase(pt) } }
+        val parts = mutableListOf<String>()
+        parts += f.label ?: language ?: "Faixa"
+        if (type == C.TRACK_TYPE_AUDIO) {
+            when (f.channelCount) {
+                1 -> parts += "Mono"
+                2 -> parts += "Estéreo"
+                6 -> parts += "5.1"
+                8 -> parts += "7.1"
+            }
+            f.sampleMimeType?.substringAfter('/')?.uppercase()?.let { parts += it }
+        }
+        if (f.selectionFlags and C.SELECTION_FLAG_FORCED != 0) parts += "forçada"
+        return parts.distinct().joinToString(" · ")
+    }
+
+    // ---------- Aparência na TV ----------
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Float) = v * resources.displayMetrics.density
+
+    /** Moldura branca no item com foco, como no resto do app (o padrão do Media3 é um círculo cinza quase invisível). */
+    private fun focusBackground(oval: Boolean, normalFill: Int = Color.TRANSPARENT) = StateListDrawable().apply {
+        fun shape(fill: Int, strokeDp: Int, stroke: Int) = GradientDrawable().apply {
+            if (oval) shape = GradientDrawable.OVAL else cornerRadius = dp(28f)
+            setColor(fill)
+            if (strokeDp > 0) setStroke(dp(strokeDp), stroke)
+        }
+        addState(intArrayOf(android.R.attr.state_focused), shape(0x55FFFFFF, 3, Color.WHITE))
+        addState(intArrayOf(), shape(normalFill, if (oval) 0 else 1, 0x88FFFFFF.toInt()))
+    }
+
+    private fun applyFocusFrames(root: android.view.View) {
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) applyFocusFrames(root.getChildAt(i))
+        } else if (root is ImageButton || root is android.widget.Button || (root is ImageView && root.isFocusable)) {
+            root.background = focusBackground(oval = true)
+        }
+    }
+
+    private fun rowButton(text: String, onClick: () -> Unit) = TextView(this).apply {
+        this.text = text
+        textSize = 18f
+        setTextColor(Color.WHITE)
+        gravity = Gravity.CENTER
+        isFocusable = true
+        isClickable = true
+        minWidth = dp(180)
+        setPadding(dp(28), dp(12), dp(28), dp(12))
+        background = focusBackground(oval = false, normalFill = 0x66000000)
+        setOnClickListener { onClick() }
+        // Com o foco aqui as teclas não passam pelo PlayerView; renova o tempo dos controles na tela.
+        setOnFocusChangeListener { _, focused -> if (focused) view.showController() }
+        layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(10); marginEnd = dp(10) }
+    }
 }
