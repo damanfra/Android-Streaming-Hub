@@ -22,6 +22,7 @@ class Prefs(private val context: Context) {
         val COLS_PORTRAIT = intPreferencesKey("cols_portrait")
         val COLS_LANDSCAPE = intPreferencesKey("cols_landscape")
         val HOME = stringPreferencesKey("home_state")
+        val JELLYFIN = stringPreferencesKey("jellyfin")
     }
 
     /** Estado do Início salvo da última vez; null na primeira abertura (ou se o formato mudou). */
@@ -41,6 +42,17 @@ class Prefs(private val context: Context) {
     }
 
     private val json = Tmdb.json
+
+    /** Login no servidor Jellyfin; null quando não conectado. */
+    val jellyfin: Flow<JfSession?> = context.dataStore.data.map { p ->
+        p[Keys.JELLYFIN]?.let { runCatching { json.decodeFromString<JfSession>(it) }.getOrNull() }
+    }
+
+    suspend fun setJellyfin(session: JfSession?) {
+        context.dataStore.edit { p ->
+            if (session == null) p.remove(Keys.JELLYFIN) else p[Keys.JELLYFIN] = json.encodeToString(session)
+        }
+    }
 
     val apiKey: Flow<String> = context.dataStore.data.map { it[Keys.API_KEY].orEmpty() }
 

@@ -53,6 +53,9 @@ import androidx.compose.ui.unit.dp
 import com.damanfra.streaminghub.AppViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VideoLibrary
+import com.damanfra.streaminghub.data.Filters
+import com.damanfra.streaminghub.data.Jellyfin
 import androidx.compose.material3.Icon
 import com.damanfra.streaminghub.data.Genre
 import com.damanfra.streaminghub.data.MediaItem
@@ -63,7 +66,12 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
 @Composable
-fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -> Unit) {
+fun HomeScreen(
+    vm: AppViewModel,
+    onOpen: (String, Int) -> Unit,
+    onOpenJellyfin: (String) -> Unit,
+    onSettings: () -> Unit,
+) {
     val key by vm.apiKey.collectAsState()
     val providers by vm.providers.collectAsState()
     val loaded by vm.homeLoaded.collectAsState()
@@ -76,7 +84,7 @@ fun HomeScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onSettings: () -
             when {
                 k == null || !loaded -> Loading()
                 k.isBlank() || providers.isEmpty() -> SetupCard(hasKey = k.isNotBlank(), onSettings = onSettings)
-                else -> HomeContent(vm, k, providers, posterCells(vm), onOpen)
+                else -> HomeContent(vm, k, providers, posterCells(vm), onOpen, onOpenJellyfin)
             }
         }
     }
@@ -106,6 +114,7 @@ private fun HomeContent(
     providers: List<Provider>,
     cells: GridCells,
     onOpen: (String, Int) -> Unit,
+    onOpenJellyfin: (String) -> Unit,
 ) {
     val tv = LocalIsTv.current
     val type by vm.homeType.collectAsState()
@@ -128,8 +137,12 @@ private fun HomeContent(
     val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
-    // Se o serviço filtrado foi desmarcado nas configurações, volta para "todos".
-    if (filter != -1 && providers.none { it.id == filter }) vm.homeProvider.value = -1
+    val jellyfin by vm.jellyfin.collectAsState()
+    val onJellyfin = filter == Jellyfin.PROVIDER_ID
+    // Se o serviço filtrado foi desmarcado nas configurações (ou o Jellyfin desconectado), volta para "todos".
+    if (onJellyfin) {
+        if (jellyfin == null) vm.homeProvider.value = -1
+    } else if (filter != -1 && providers.none { it.id == filter }) vm.homeProvider.value = -1
     val ids = if (filter == -1) providers.map { it.id }.toSet() else setOf(filter)
 
     suspend fun fetch(target: Int) {
@@ -151,6 +164,7 @@ private fun HomeContent(
     }
 
     LaunchedEffect(type, ids, filters, retry) {
+        if (onJellyfin) return@LaunchedEffect
         val query = Triple(type, ids, filters)
         // Mesma busca de antes (voltou dos Detalhes ou de outra aba): mantém o que já foi carregado.
         if (retry == 0 && catalog.query == query && results.isNotEmpty()) return@LaunchedEffect
@@ -170,6 +184,7 @@ private fun HomeContent(
         }
     }
     LaunchedEffect(nearEnd, page, type, ids, filters, error) {
+        if (onJellyfin) return@LaunchedEffect
         if (nearEnd && !loading && error == null && page in 1 until totalPages) fetch(page + 1)
     }
 
@@ -190,8 +205,8 @@ private fun HomeContent(
     }
     // Ao voltar dos Detalhes (TV) e ao reabrir o app (celular e TV, via estado salvo), a grade rola até
     // o título aberto e, na TV, o foco vai para a capa.
-    LaunchedEffect(results.size, loading) {
-        if (page == 0 || loading) return@LaunchedEffect
+    LaunchedEffect(results.size, loading, onJellyfin) {
+        if (onJellyfin || page == 0 || loading) return@LaunchedEffect
         val target = when {
             panel?.restorePoster == true -> panel.lastPosterId
             vm.restoreOnStart -> vm.lastOpened.value
@@ -219,10 +234,16 @@ private fun HomeContent(
     Column(Modifier.fillMaxSize()) {
         // Na TV, Filmes/Séries, serviços e filtros ficam no painel lateral (TvSidePanel).
         if (tv) {
-            val title = providers.firstOrNull { it.id == filter }?.name ?: "Todos os seus serviços"
-            TvHomeHeader(title, type, filters, genres)
+            val title = if (onJellyfin) jellyfin?.serverName?.ifBlank { null } ?: Jellyfin.NAME
+                else providers.firstOrNull { it.id == filter }?.name ?: "Todos os seus serviços"
+            TvHomeHeader(title, type, if (onJellyfin) Filters() else filters, genres)
         } else {
-            PhoneHomeBar(vm, type, filter, providers, filters.activeCount(type)) { showFilters = true }
+            PhoneHomeBar(vm, type, filter, providers, jellyfin != null, filters.activeCount(type)) { showFilters = true }
+        }
+        val jf = jellyfin
+        if (onJellyfin && jf != null) {
+            JellyfinHomeGrid(vm, jf, type, cells, onOpenJellyfin)
+            return@Column
         }
         LazyVerticalGrid(
             state = gridState,
@@ -277,6 +298,7 @@ private fun PhoneHomeBar(
     type: String,
     filter: Int,
     providers: List<Provider>,
+    hasJellyfin: Boolean,
     activeFilters: Int,
     onFilters: () -> Unit,
 ) {
@@ -298,6 +320,16 @@ private fun PhoneHomeBar(
         }
         item {
             FilterChip(selected = filter == -1, onClick = { vm.homeProvider.value = -1 }, label = { Text("Todos") })
+        }
+        if (hasJellyfin) {
+            item {
+                FilterChip(
+                    selected = filter == Jellyfin.PROVIDER_ID,
+                    onClick = { vm.homeProvider.value = Jellyfin.PROVIDER_ID },
+                    label = { Text(Jellyfin.NAME) },
+                    leadingIcon = { Icon(Icons.Filled.VideoLibrary, contentDescription = null) },
+                )
+            }
         }
         items(providers, key = { it.id }) { p ->
             FilterChip(

@@ -136,12 +136,13 @@ private fun TvApp(vm: AppViewModel, nav: NavHostController) {
 @Composable
 private fun AppNavHost(vm: AppViewModel, nav: NavHostController, modifier: Modifier) {
     val openDetail: (String, Int) -> Unit = { type, id -> nav.navigate("detail/$type/$id") }
+    val openJellyfin: (String) -> Unit = { id -> nav.navigate("jf/$id") }
     val openSettings: () -> Unit = { nav.navigate("settings") }
     val back: () -> Unit = { nav.popBackStack() }
 
     NavHost(navController = nav, startDestination = "home", modifier = modifier) {
-        composable("home") { HomeScreen(vm, openDetail, openSettings) }
-        composable("search") { SearchScreen(vm, openDetail) }
+        composable("home") { HomeScreen(vm, openDetail, openJellyfin, openSettings) }
+        composable("search") { SearchScreen(vm, openDetail, openJellyfin) }
         composable("list") { ListScreen(vm, openDetail) }
         composable("apps") { AppsScreen(openSettings) }
         composable("settings") { SettingsScreen(vm, back) }
@@ -154,7 +155,10 @@ private fun AppNavHost(vm: AppViewModel, nav: NavHostController, modifier: Modif
         ) { entry ->
             val type = entry.arguments?.getString("type") ?: "movie"
             val id = entry.arguments?.getInt("id") ?: 0
-            DetailScreen(vm, type, id, back)
+            DetailScreen(vm, type, id, back, openJellyfin)
+        }
+        composable("jf/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            JellyfinDetailScreen(vm, entry.arguments?.getString("id").orEmpty(), back, openDetail)
         }
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.ripple.RippleAlpha
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -78,6 +79,7 @@ import androidx.compose.ui.zIndex
 import com.damanfra.streaminghub.AppViewModel
 import com.damanfra.streaminghub.data.Filters
 import com.damanfra.streaminghub.data.Genre
+import com.damanfra.streaminghub.data.Jellyfin
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
@@ -162,6 +164,8 @@ class TvPanelFocus {
     /** true enquanto a grade do Início está na tela; fora dela, ► segue a busca normal. */
     var gridReady = false
     var lastPosterId by mutableStateOf<Int?>(null)
+    /** Igual a [lastPosterId], para as capas do Jellyfin (IDs em texto). */
+    var lastJfKey by mutableStateOf<String?>(null)
     /** Ligado ao abrir um título: ao voltar dos Detalhes, o foco retorna à capa [lastPosterId]. */
     var restorePoster = false
 
@@ -217,19 +221,25 @@ fun TvSidePanel(
             val providers by vm.providers.collectAsState()
             val selected by vm.homeProvider.collectAsState()
             val filters by vm.filters.collectAsState()
+            val jellyfin by vm.jellyfin.collectAsState()
+            val onJellyfin = selected == Jellyfin.PROVIDER_ID
 
             TypeSwitch(type) { vm.homeType.value = it }
             // Filtros acima do dial: o dial consome ▲▼, então o que fica abaixo dele só se alcança depois do último serviço.
             val active = filters.activeCount(type)
             OutlinedButton(
                 onClick = onFilters,
+                // Os filtros são do catálogo do TMDB; não valem para a biblioteca do Jellyfin.
+                enabled = !onJellyfin,
                 modifier = Modifier.fillMaxWidth().tvFocusFrame(RoundedCornerShape(50), 1.03f),
             ) {
                 Icon(Icons.Filled.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
                 Text(if (active > 0) "  Filtros ($active)" else "  Filtros")
             }
-            val entries = remember(providers) {
-                listOf(DialEntry(-1, "Todos", null)) + providers.map { DialEntry(it.id, it.name, it.logoPath) }
+            val entries = remember(providers, jellyfin != null) {
+                listOf(DialEntry(-1, "Todos", null)) +
+                    (if (jellyfin != null) listOf(DialEntry(Jellyfin.PROVIDER_ID, Jellyfin.NAME, null, Icons.Filled.VideoLibrary)) else emptyList()) +
+                    providers.map { DialEntry(it.id, it.name, it.logoPath) }
             }
             ServiceDial(
                 entries = entries,
@@ -290,7 +300,7 @@ private fun TypeSwitch(type: String, onPick: (String) -> Unit) {
     }
 }
 
-private data class DialEntry(val id: Int, val name: String, val logoPath: String?)
+private data class DialEntry(val id: Int, val name: String, val logoPath: String?, val icon: ImageVector = Icons.Filled.Star)
 
 /**
  * Dial giratório dos serviços: ▲▼ troca, o escolhido fica no centro e os vizinhos se afastam como numa roda.
@@ -379,7 +389,7 @@ private fun DialItem(entry: DialEntry, center: Boolean, focused: Boolean, modifi
                 Modifier.size(30.dp).clip(RoundedCornerShape(6.dp)).background(SelectedBg),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(entry.icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
         }
         Text(

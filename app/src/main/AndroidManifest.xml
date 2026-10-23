@@ -43,7 +43,9 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.StreamingHub">
+        android:theme="@style/Theme.StreamingHub"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: o Jellyfin de casa costuma responder em http:// na rede local. -->
 
         <activity
             android:name=".MainActivity"
@@ -55,5 +57,11 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation" />
     </application>
 </manifest>

@@ -15,7 +15,8 @@ App Android pessoal (Kotlin + Jetpack Compose) que centraliza os serviços de st
 - **Serviços do usuário:** ele marca em Configurações quais assina. O Início filtra por eles (`with_watch_providers`).
 - **Abrir no app:** `StreamingApps.openTitle` tenta, nesta ordem: (1) link direto da página do título (vem da JustWatch) com `setPackage` do app instalado; (2) busca do app, para quem tem `searchUrl`; (3) abre o app com o título copiado; (4) navegador/loja.
 - **JustWatch (`JustWatch.kt`):** usa a API GraphQL **não oficial** (`apis.justwatch.com/graphql`) para pegar os links diretos por serviço e a nota do IMDb. Confere o título pelo `tmdbId` para evitar homônimo. Qualquer falha cai no plano B sem quebrar a tela.
-- **Persistência local (`Prefs.kt`, DataStore):** chave do TMDB, serviços assinados, Minha lista, Recentes, colunas por orientação e o **estado do Início** (`HomeState`: filtros, Filmes/Séries, serviço e último título aberto, salvo a cada mudança). Ao reabrir o app, o Início volta igual e rola até o último título (no Fire TV o sistema costuma fechar o app ao abrir um serviço).
+- **Jellyfin (`Jellyfin.kt`, `JellyfinScreen.kt`, `PlayerActivity.kt`, 22/10/2026):** cliente da API REST oficial (rotas conferidas na especificação 12.3: tudo com `?userId=`, as antigas `/Users/{id}/Items` não existem mais). Login por usuário/senha ou Quick Connect; "Procurar na rede" usa a descoberta UDP 7359. Aparece no Início como serviço de ID fixo `Jellyfin.PROVIDER_ID = -100` (chip no celular, entrada no dial da TV, logo depois de "Todos"), com "Continuar assistindo" + biblioteca por data de adição. Um índice `tipo:tmdb:ID`/`tipo:imdb:ID` → item (`vm.jellyfinIndex`, carregado ao conectar/abrir) liga o TMDB ao servidor: botão "Assistir no Jellyfin" nos Detalhes e marca na Busca. Player Media3 numa Activity própria: toca o arquivo original (`/Videos/{id}/stream?static=true`, token no cabeçalho `Authorization`); legendas internas o ExoPlayer lê do arquivo, externas de texto vêm convertidas para SRT pelo servidor (`.../Subtitles/{i}/Stream.srt`). Se o aparelho não decodifica vídeo/áudio (ou dá erro), pede `PlaybackInfo` com DeviceProfile só de transcodificação e usa a `TranscodingUrl` (HLS fMP4) que o servidor devolve; a rota `master.m3u8` não aparece na especificação, por isso não é montada à mão. Progresso a cada 10 s em `/Sessions/Playing/*`.
+- **Persistência local (`Prefs.kt`, DataStore):** chave do TMDB, Jellyfin, serviços assinados, Minha lista, Recentes, colunas por orientação e o **estado do Início** (`HomeState`: filtros, Filmes/Séries, serviço e último título aberto, salvo a cada mudança). Ao reabrir o app, o Início volta igual e rola até o último título (no Fire TV o sistema costuma fechar o app ao abrir um serviço).
 
 ## Mapa do código (`app/src/main/java/com/damanfra/streaminghub/`)
 
@@ -31,6 +32,9 @@ App Android pessoal (Kotlin + Jetpack Compose) que centraliza os serviços de st
 | `ui/DetailScreen.kt` | detalhes, onde assistir, elenco, IMDb |
 | `ui/ListScreen.kt` | abas Recentes / Quero ver / Assistidos |
 | `ui/SearchScreen.kt`, `AppsScreen.kt`, `SettingsScreen.kt`, `App.kt`, `Components.kt` | demais telas e navegação |
+| `data/Jellyfin.kt` | cliente do Jellyfin: login, Quick Connect, descoberta, biblioteca, índice TMDB, reprodução |
+| `ui/JellyfinScreen.kt` | grade do Jellyfin no Início, tela do título (temporadas/episódios) e seção nas Configurações |
+| `PlayerActivity.kt` | player embutido (Media3): legendas, conversão no servidor quando preciso, progresso |
 | `ui/Tv.kt` | modo TV: detecção (`LocalIsTv`), moldura de foco, painel lateral com dial, roteamento de foco painel↔grade, campo de texto que só abre o teclado no OK |
 
 ## Funcionalidades prontas
@@ -55,6 +59,8 @@ Início (Filmes/Séries, chip por serviço, **Filtros**), Busca, Detalhes, Minha
 - **Assinatura do APK:** `keystore/streaminghub-debug.jks` está **commitado de propósito** (senha `streaminghub`, uso pessoal). É isso que permite instalar uma versão por cima da outra, mantendo chave do TMDB e listas. Não trocar o keystore.
 - **Versão:** `versionCode = GITHUB_RUN_NUMBER`; sem CI vale `1`. Só gera APK instalável por cima o build do GitHub Actions.
 - **Release:** cada push na `main` (exceto os que só mudam `*.md`, `docs/` e `tools/`, ignorados por `paths-ignore`) dispara `.github/workflows/build.yml`, que compila `assembleRelease` e publica `StreamingHub-v0.1.N.apk` em Releases (pré-lançamento).
+- **Jellyfin em http:** o manifesto liga `usesCleartextTraffic` porque o servidor de casa responde em `http://` na rede local. Sem isso o Android 9+ bloqueia.
+- **Jellyfin, limites conhecidos:** legendas externas em imagem (.idx/.sub VobSub, .sup PGS) não entram; na versão convertida pelo servidor as legendas internas em imagem se perdem. Sem próximo episódio automático ainda. **Ainda não testado com servidor real** (o dono ia montar o servidor depois de 22/10/2026).
 - **Android 11+:** todo app que precisa ser enxergado/aberto tem de estar em `<queries>` no `AndroidManifest.xml` (inclui `com.imdb.mobile`). Ao adicionar serviço novo, atualize o manifest **e** a lista em `StreamingApps.all`.
 - **Provedores com nomes variantes:** o TMDB lista "Netflix" e "Netflix Standard with Ads" separados. A UI agrupa por app (`appKey`/`forProvider`) para ter um botão só. Canais vendidos dentro de outra loja (nome contém "channel") são ignorados de propósito.
 - **Nota "Melhor avaliados":** exige mínimo de votos (300 filmes, 150 séries) para não listar títulos obscuros com nota 10.

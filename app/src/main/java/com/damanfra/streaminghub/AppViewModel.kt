@@ -17,6 +17,11 @@ import com.damanfra.streaminghub.data.MediaItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import com.damanfra.streaminghub.data.JfItem
+import com.damanfra.streaminghub.data.JfSession
+import com.damanfra.streaminghub.data.Jellyfin
 import com.damanfra.streaminghub.data.Provider
 import com.damanfra.streaminghub.data.SavedItem
 import kotlinx.coroutines.flow.SharingStarted
@@ -84,6 +89,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val catalog = HomeCatalog()
 
+    /** Login no Jellyfin (null = não conectado). Lido antes de [homeLoaded], junto com o estado do Início. */
+    val jellyfin = MutableStateFlow<JfSession?>(null)
+
+    /** O que existe no servidor Jellyfin, por ID do TMDB/IMDb (ver [Jellyfin.index]). */
+    val jellyfinIndex = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** Biblioteca do Jellyfin carregada no Início; como [catalog], sobrevive à ida aos Detalhes. */
+    class JellyfinCatalog {
+        val resume = mutableStateListOf<JfItem>()
+        val items = mutableStateListOf<JfItem>()
+        /** -1 = ainda não carregou. */
+        var total by mutableIntStateOf(-1)
+        var query: Any? = null
+    }
+
+    val jfCatalog = JellyfinCatalog()
+
+    fun setJellyfin(session: JfSession?) {
+        viewModelScope.launch {
+            if (session == null) jellyfin.value?.let { Jellyfin.logout(it) }
+            jfCatalog.query = null
+            prefs.setJellyfin(session)
+        }
+    }
+
+    fun refreshJellyfinIndex() {
+        val s = jellyfin.value ?: return
+        viewModelScope.launch { runCatching { Jellyfin.index(s) }.onSuccess { jellyfinIndex.value = it } }
+    }
+
     /** Último título aberto a partir do Início. */
     val lastOpened = MutableStateFlow<Int?>(null)
 
@@ -94,6 +129,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var restoreOnStart = false
 
     init {
+        viewModelScope.launch { prefs.jellyfin.collect { jellyfin.value = it } }
+        viewModelScope.launch {
+            jellyfin.collectLatest { s ->
+                jellyfinIndex.value = emptyMap()
+                if (s != null) runCatching { Jellyfin.index(s) }.onSuccess { jellyfinIndex.value = it }
+            }
+        }
         viewModelScope.launch {
             prefs.loadHome()?.let { s ->
                 filters.value = s.filters
@@ -102,6 +144,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 lastOpened.value = s.lastOpened
                 restoreOnStart = s.lastOpened != null
             }
+            jellyfin.value = prefs.jellyfin.first()
             homeLoaded.value = true
             combine(filters, homeType, homeProvider, lastOpened) { f, t, p, l -> HomeState(t, p, f, l) }
                 .drop(1)

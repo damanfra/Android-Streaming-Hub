@@ -42,16 +42,22 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.damanfra.streaminghub.AppViewModel
+import com.damanfra.streaminghub.data.Jellyfin
+import com.damanfra.streaminghub.data.JfItem
 import com.damanfra.streaminghub.data.MediaItem
 import com.damanfra.streaminghub.data.Tmdb
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 @Composable
-fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
+fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit, onOpenJellyfin: (String) -> Unit) {
     val key by vm.apiKey.collectAsState()
+    val jellyfin by vm.jellyfin.collectAsState()
+    val jfIndex by vm.jellyfinIndex.collectAsState()
+    val jfResults = remember { mutableStateListOf<JfItem>() }
     var query by rememberSaveable { mutableStateOf("") }
     val results = remember { mutableStateListOf<MediaItem>() }
     var loading by remember { mutableStateOf(false) }
@@ -59,17 +65,22 @@ fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
     var searched by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(query, key) {
+    LaunchedEffect(query, key, jellyfin) {
         val k = key ?: return@LaunchedEffect
         val q = query.trim()
         if (q.length < 2) {
+            jfResults.clear()
             results.clear(); error = null; searched = false; loading = false
             return@LaunchedEffect
         }
         delay(450) // espera o usuário parar de digitar
         loading = true
         try {
+            // O servidor Jellyfin responde em paralelo; se falhar, a busca do TMDB segue normalmente.
+            val jf = jellyfin?.let { s -> async { runCatching { Jellyfin.search(s, q) }.getOrDefault(emptyList()) } }
             val found = Tmdb.search(k, q)
+            jfResults.clear()
+            jf?.await()?.let { jfResults.addAll(it) }
             results.clear()
             results.addAll(found)
             error = null
@@ -106,15 +117,30 @@ fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
             when {
                 err != null -> ErrorBox(err)
                 loading && results.isEmpty() -> Loading()
-                searched && results.isEmpty() -> EmptyBox("Nenhum resultado.")
+                searched && results.isEmpty() && jfResults.isEmpty() -> EmptyBox("Nenhum resultado.")
                 !searched -> EmptyBox("Busque em todos os serviços de uma vez.")
             }
             LazyColumn(
                 contentPadding = PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                val s = jellyfin
+                if (s != null && jfResults.isNotEmpty()) {
+                    item(key = "jf-header") { SectionTitle("No seu Jellyfin") }
+                    items(jfResults, key = { "jf-${it.id}" }) { j ->
+                        SearchRow(
+                            Jellyfin.posterUrl(s, j, 240), j.title,
+                            listOfNotNull(if (j.isSeries) "Série" else "Filme", j.productionYear?.toString()).joinToString(" · "),
+                        ) { onOpenJellyfin(j.id) }
+                    }
+                    if (results.isNotEmpty()) item(key = "tmdb-header") { SectionTitle("Em todos os serviços") }
+                }
                 items(results, key = { "${it.mediaType}-${it.id}" }) { m ->
-                    SearchRow(m) { onOpen(m.mediaType ?: "movie", m.id) }
+                    val type = m.mediaType ?: "movie"
+                    val local = if (Jellyfin.match(jfIndex, type, m.id) != null) "no seu Jellyfin" else null
+                    SearchRow(m.posterPath, m.displayTitle, listOfNotNull(typeLabel(m.mediaType), m.year, local).joinToString(" · ")) {
+                        onOpen(type, m.id)
+                    }
                 }
             }
         }
@@ -122,16 +148,16 @@ fun SearchScreen(vm: AppViewModel, onOpen: (String, Int) -> Unit) {
 }
 
 @Composable
-private fun SearchRow(item: MediaItem, onClick: () -> Unit) {
+private fun SearchRow(poster: String?, title: String, subtitle: String, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Poster(item.posterPath, item.displayTitle, Modifier.size(width = 60.dp, height = 90.dp))
+        Poster(poster, title, Modifier.size(width = 60.dp, height = 90.dp))
         Column(Modifier.padding(start = 12.dp)) {
-            Text(item.displayTitle, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(
-                listOfNotNull(typeLabel(item.mediaType), item.year).joinToString(" · "),
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

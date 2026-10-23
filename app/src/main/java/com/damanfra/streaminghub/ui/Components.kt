@@ -127,7 +127,8 @@ fun Poster(path: String?, title: String, modifier: Modifier = Modifier) {
             )
         } else {
             AsyncImage(
-                model = Tmdb.image(path),
+                // Caminho do TMDB ("/abc.jpg") ou URL completa (capas do Jellyfin).
+                model = if (path.startsWith("http")) path else Tmdb.image(path),
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),

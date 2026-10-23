@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.damanfra.streaminghub.AppViewModel
+import com.damanfra.streaminghub.data.Jellyfin
 import com.damanfra.streaminghub.data.JustWatch
 import com.damanfra.streaminghub.data.MediaDetail
 import com.damanfra.streaminghub.data.Provider
@@ -76,7 +78,7 @@ import kotlinx.coroutines.CancellationException
 import java.util.Locale
 
 @Composable
-fun DetailScreen(vm: AppViewModel, type: String, id: Int, onBack: () -> Unit) {
+fun DetailScreen(vm: AppViewModel, type: String, id: Int, onBack: () -> Unit, onJellyfin: (String) -> Unit) {
     val key by vm.apiKey.collectAsState()
     var detail by remember { mutableStateOf<MediaDetail?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -98,7 +100,7 @@ fun DetailScreen(vm: AppViewModel, type: String, id: Int, onBack: () -> Unit) {
         val d = detail
         val err = error
         when {
-            d != null -> TvDetailBody(vm, type, d, onBack)
+            d != null -> TvDetailBody(vm, type, d, onBack, onJellyfin)
             err != null -> ErrorBox(err) { retry++ }
             else -> Loading()
         }
@@ -121,7 +123,7 @@ fun DetailScreen(vm: AppViewModel, type: String, id: Int, onBack: () -> Unit) {
             val d = detail
             val err = error
             when {
-                d != null -> DetailBody(vm, type, d)
+                d != null -> DetailBody(vm, type, d, onJellyfin)
                 err != null -> ErrorBox(err) { retry++ }
                 else -> Loading()
             }
@@ -142,12 +144,15 @@ private class DetailInfo(
     val imdbId: String?,
     /** Página da JustWatch com os links de todos os serviços. */
     val providersPage: String?,
+    /** ID do título no servidor Jellyfin do usuário, se ele estiver lá. */
+    val jellyfinId: String?,
 )
 
 @Composable
 private fun rememberDetailInfo(vm: AppViewModel, type: String, d: MediaDetail): DetailInfo {
     val myProviders by vm.providers.collectAsState()
     val watchlist by vm.watchlist.collectAsState()
+    val jfIndex by vm.jellyfinIndex.collectAsState()
     val saved = watchlist.firstOrNull { it.id == d.id && it.type == type }
     val item = SavedItem(id = d.id, type = type, title = d.displayTitle, posterPath = d.posterPath, year = d.year)
 
@@ -176,6 +181,7 @@ private fun rememberDetailInfo(vm: AppViewModel, type: String, d: MediaDetail): 
     return DetailInfo(
         item = item, saved = saved, mine = mine, others = others, rentBuy = rentBuy,
         hasStreaming = streaming.isNotEmpty(), jw = jw, imdbId = d.imdbId ?: jw.imdbId, providersPage = br?.link,
+        jellyfinId = Jellyfin.match(jfIndex, type, d.id, d.imdbId),
     )
 }
 
@@ -203,7 +209,7 @@ private fun metaLine(type: String, d: MediaDetail): String {
 }
 
 @Composable
-private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
+private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail, onJellyfin: (String) -> Unit) {
     val context = LocalContext.current
     val info = rememberDetailInfo(vm, type, d)
     val saved = info.saved
@@ -266,7 +272,14 @@ private fun DetailBody(vm: AppViewModel, type: String, d: MediaDetail) {
         }
 
         SectionTitle("Onde assistir")
-        if (mine.isEmpty()) {
+        info.jellyfinId?.let { jf ->
+            Button(onClick = { onJellyfin(jf) }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.VideoLibrary, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Assistir no Jellyfin")
+            }
+        }
+        if (mine.isEmpty() && info.jellyfinId == null) {
             Text(
                 if (!info.hasStreaming) "Não está em nenhum streaming por assinatura no Brasil agora."
                 else "Não está nos serviços que você assina.",
@@ -362,7 +375,7 @@ private fun ProviderRow(list: List<Provider>) {
  * "Assistir em" com um botão por serviço assinado (▲▼ entre eles; o foco começa no primeiro).
  */
 @Composable
-private fun TvDetailBody(vm: AppViewModel, type: String, d: MediaDetail, onBack: () -> Unit) {
+private fun TvDetailBody(vm: AppViewModel, type: String, d: MediaDetail, onBack: () -> Unit, onJellyfin: (String) -> Unit) {
     val context = LocalContext.current
     val info = rememberDetailInfo(vm, type, d)
     val saved = info.saved
@@ -443,7 +456,23 @@ private fun TvDetailBody(vm: AppViewModel, type: String, d: MediaDetail, onBack:
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text("ASSISTIR EM", fontSize = 11.sp, letterSpacing = 1.2.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (info.mine.isEmpty()) {
+            info.jellyfinId?.let { jf ->
+                Button(
+                    onClick = { onJellyfin(jf) },
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .focusRequester(firstAction)
+                        .tvFocusFrame(RoundedCornerShape(10.dp), 1.04f),
+                ) {
+                    Icon(Icons.Filled.VideoLibrary, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(Jellyfin.NAME, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Spacer(Modifier.weight(1f))
+                }
+            }
+            if (info.mine.isEmpty() && info.jellyfinId == null) {
                 Text(
                     if (!info.hasStreaming) "Não está em nenhum streaming por assinatura no Brasil agora."
                     else "Não está nos serviços que você assina.",
@@ -459,7 +488,7 @@ private fun TvDetailBody(vm: AppViewModel, type: String, d: MediaDetail, onBack:
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp)
-                        .then(if (i == 0) Modifier.focusRequester(firstAction) else Modifier)
+                        .then(if (i == 0 && info.jellyfinId == null) Modifier.focusRequester(firstAction) else Modifier)
                         .tvFocusFrame(RoundedCornerShape(10.dp), 1.04f),
                 ) {
                     ProviderLogo(p.logoPath, p.name, size = 24)
@@ -481,7 +510,7 @@ private fun TvDetailBody(vm: AppViewModel, type: String, d: MediaDetail, onBack:
             FilledTonalButton(
                 onClick = { vm.toggleSaved(info.item) },
                 modifier = Modifier.fillMaxWidth()
-                    .then(if (info.mine.isEmpty()) Modifier.focusRequester(firstAction) else Modifier)
+                    .then(if (info.mine.isEmpty() && info.jellyfinId == null) Modifier.focusRequester(firstAction) else Modifier)
                     .tvFocusFrame(RoundedCornerShape(50), 1.04f),
             ) {
                 Icon(if (saved != null) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder, contentDescription = null, modifier = Modifier.size(18.dp))

@@ -146,6 +146,8 @@ fun SettingsScreen(vm: AppViewModel, onBack: () -> Unit) {
                 }
             }
 
+            JellyfinSettings(vm)
+
             SectionTitle("Capas por linha")
             Text(
                 "\"Auto\" ajusta pelo tamanho da tela. A horizontal também vale para a TV.",
